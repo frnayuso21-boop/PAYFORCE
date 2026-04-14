@@ -34,3 +34,8 @@ prisma/*.db-journal
 # OS
 .DS_Store
 Thumbs.db
+
+# CLI tools / no forman parte del build de Next.js
+payforce-migrate
+payforcesystems
+scripts/*.mjs
