@@ -25,8 +25,6 @@ const config: CapacitorConfig = {
 
   // ─── iOS ─────────────────────────────────────────────────────────────────
   ios: {
-    // Requiere iOS 15.4+ para Tap to Pay on iPhone
-    deploymentTarget: "15.4",
     // Colores del sistema (barra de estado)
     backgroundColor: "#ffffff",
     contentInset: "automatic",
