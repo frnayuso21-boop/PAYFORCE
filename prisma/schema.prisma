@@ -1,0 +1,758 @@
+// ──────────────────────────────────────────────────────────────────────────────
+// PayForce — Prisma Schema
+//
+// Convenciones:
+//   · IDs internos:  cuid()
+//   · IDs de Stripe: String  (acct_, pi_, po_, dp_, evt_…)
+//   · Importes:      Int     (céntimos)
+//   · Fechas:        DateTime @default(now()) / @updatedAt
+//
+// Campos marcados con // ENUM almacenan strings constantes documentadas.
+// Pueden convertirse a enum Prisma real en una migración posterior sin
+// cambiar el código de negocio.
+// ──────────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║  USER                                                                        ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+
+model User {
+  id         String  @id @default(cuid())
+  supabaseId String? @unique // ID de Supabase Auth (uuid) — null en usuarios pre-migración
+  email      String  @unique
+  name       String  @default("")
+  // passwordHash eliminado — autenticación gestionada por Supabase Auth
+  role      String  @default("MERCHANT") // ENUM: ADMIN | MERCHANT | VIEWER
+  avatarUrl String?
+
+  // Onboarding y estado de cuenta
+  country        String  @default("ES")
+  marketingOptIn Boolean @default(false)
+  // ENUM: REGISTERED | ONBOARDING_PENDING | TEST_MODE | EMAIL_NOT_VERIFIED | READY_FOR_PAYMENTS | PAYMENTS_ENABLED
+  accountStatus  String  @default("ONBOARDING_PENDING")
+  emailVerified  Boolean @default(false)
+
+  connectedAccounts ConnectedAccount[]
+  paymentLinks      PaymentLink[]
+  onboardingProfile OnboardingProfile?
+  // Session eliminado — sesiones gestionadas por Supabase Auth
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([email])
+  @@index([supabaseId])
+  @@index([accountStatus])
+  @@map("users")
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║  ONBOARDING PROFILE                                                          ║
+// ║  Datos de configuración inicial recogidos en el onboarding del merchant.    ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+
+model OnboardingProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id])
+
+  companyName    String  @default("")
+  companyCountry String  @default("ES")
+  companyCity    String  @default("")
+  website        String?
+
+  // ENUM: FREELANCER | COMPANY | STARTUP | MARKETPLACE | OTHER
+  companyType String @default("")
+
+  // JSON array de strings: selectedFeatures: string[]
+  selectedFeatures String @default("[]")
+
+  // ENUM: test | live
+  mode        String    @default("test")
+  completedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("onboarding_profiles")
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║  CONNECTED ACCOUNT                                                           ║
+// ║  userId opcional: el webhook puede crear la cuenta sin un User previo.       ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+
+model ConnectedAccount {
+  id String @id @default(cuid())
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+
+  stripeAccountId  String @unique
+  businessName     String @default("")
+  email            String @default("")
+  country          String @default("ES")
+  defaultCurrency  String @default("eur")
+
+  // ENUM: NOT_CONNECTED | PENDING | RESTRICTED | ENABLED | REJECTED
+  status String @default("NOT_CONNECTED")
+
+  chargesEnabled   Boolean @default(false)
+  payoutsEnabled   Boolean @default(false)
+  detailsSubmitted Boolean @default(false)
+
+  // ENUM: DAILY | WEEKLY | MONTHLY | MANUAL
+  payoutSchedule String @default("WEEKLY")
+
+  stripeMetadata String? // JSON stringificado
+
+  // Tienda personalizada (subdominio mi-negocio.payforce.io)
+  slug             String? @unique   // "mi-negocio" → mi-negocio.payforce.io
+  storeDescription String?           // Descripción pública de la tienda
+  primaryColor     String?           // Color principal hex, p.ej. "#6366f1"
+  storeEnabled     Boolean @default(false)
+
+  payments              Payment[]
+  payouts               Payout[]
+  disputes              Dispute[]
+  customers             Customer[]
+  paymentLinks          PaymentLink[]
+  merchantSplits        MerchantSplit[]
+  instantPayoutRequests InstantPayoutRequest[]
+  apiKeys               ApiKey[]
+  fraudAlerts           FraudAlert[]
+  fraudRules            FraudRule[]
+  invoiceSettings       InvoiceSettings?
+  products              Product[]
+  manualInvoices        ManualInvoice[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([stripeAccountId])
+  @@index([status])
+  @@map("connected_accounts")
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║  INVOICE SETTINGS                                                            ║
+// ║  Personalización de facturas por merchant.                                   ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+
+model InvoiceSettings {
+  id                 String @id @default(cuid())
+  connectedAccountId String @unique
+  connectedAccount   ConnectedAccount @relation(fields: [connectedAccountId], references: [id])
+
+  // Datos del emisor (sobrescriben los de ConnectedAccount)
+  companyName   String  @default("")
+  taxId         String  @default("") // NIF / CIF / VAT
+  address       String  @default("")
+  city          String  @default("")
+  postalCode    String  @default("")
+  country       String  @default("ES")
+  phone         String  @default("")
+  website       String  @default("")
+  email         String  @default("")
+
+  // Branding
+  logoUrl      String? // URL pública de la imagen del logo
+  accentColor  String  @default("#6366f1") // Color principal del PDF
+
+  // Numeración
+  invoicePrefix     String @default("FAC")  // FAC → FAC-2025-001
+  nextInvoiceNumber Int    @default(1)
+
+  // Contenido personalizado
+  invoiceNotes    String @default("") // Texto libre en el pie de factura
+  paymentTerms    String @default("Pago inmediato")
+  bankAccount     String @default("") // IBAN para transferencias
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("invoice_settings")
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║  CUSTOMER                                                                    ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+
+model Customer {
+  id               String  @id @default(cuid())
+  stripeCustomerId String? @unique  // nullable: clientes creados localmente sin Stripe todavía
+
+  connectedAccountId String
+  connectedAccount   ConnectedAccount @relation(fields: [connectedAccountId], references: [id])
+
+  // ── Account data ────────────────────────────────────────────────────────
+  name        String
+  email       String
+  language    String?  @default("es")   // es, en, fr, de, pt…
+  description String?
+  companyName String?
+  contactName String?
+
+  // ── Billing data ─────────────────────────────────────────────────────────
+  billingEmail    String?
+  billingCountry  String?
+  phone           String?
+  phonePrefix     String?
+  currency        String  @default("eur")
+  timezone        String? @default("Europe/Madrid")
+
+  // ── Tax data ─────────────────────────────────────────────────────────────
+  taxStatus    String?   // "none" | "exempt" | "reverse"
+  taxId        String?
+  taxIdType    String?   // "dni" | "nie" | "cif" | "vat" | "ein" | …
+  taxIdCountry String?
+
+  // ── Shipping data ────────────────────────────────────────────────────────
+  shippingName       String?
+  shippingAddress    String?
+  shippingCity       String?
+  shippingPostalCode String?
+  shippingState      String?
+  shippingCountry    String?
+
+  // ── Invoice settings ─────────────────────────────────────────────────────
+  invoiceTemplate String? @default("default")  // "default" | custom id
+
+  // ── Stats ────────────────────────────────────────────────────────────────
+  totalSpend Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  payments Payment[]
+
+  @@unique([connectedAccountId, email])
+  @@index([connectedAccountId])
+  @@index([stripeCustomerId])
+  @@map("customers")
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║  PAYMENT                                                                     ║
+// ║  Espejo local del PaymentIntent de Stripe.                                   ║
+// ║  Creado/actualizado desde webhook payment_intent.*                           ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+
+model Payment {
+  id String @id @default(cuid())
+
+  stripePaymentIntentId String  @unique // pi_xxx
+  stripeChargeId        String? @unique // ch_xxx
+
+  connectedAccountId String
+  connectedAccount   ConnectedAccount @relation(fields: [connectedAccountId], references: [id])
+
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+
+  // Importes en céntimos
+  amount               Int
+  currency             String @default("eur")
+  applicationFeeAmount Int    @default(0)
+  netAmount            Int    @default(0)
+
+  // ENUM: REQUIRES_PAYMENT_METHOD | REQUIRES_CONFIRMATION | REQUIRES_ACTION
+  //       | PROCESSING | SUCCEEDED | FAILED | CANCELED
+  status        String
+  description   String?
+
+  // Datos del cliente (copiados del PaymentLink al confirmar el pago)
+  customerEmail String?
+  customerName  String?
+
+  refundedAmount Int     @default(0)
+  metadata       String? // JSON stringificado
+
+  failureCode    String?
+  failureMessage String?
+
+  // ── Titan: sistema de detección de fraude ────────────────────────────────
+  // Puntuación 0–100 calculada por src/lib/fraud.ts
+  riskScore   Int?
+  // JSON: RiskFlag[] — señales que dispararon la puntuación
+  riskFlags   String?
+  // true si Titan bloqueó el pago automáticamente
+  riskBlocked Boolean @default(false)
+
+  // Relación inversa con PaymentLink (un link genera un pago)
+  paymentLink   PaymentLink? @relation(fields: [paymentLinkId], references: [id])
+  paymentLinkId String?
+
+  disputes      Dispute[]
+  merchantSplit MerchantSplit?
+  fraudAlerts   FraudAlert[]
+
+  stripeCreatedAt DateTime?
+
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  capturedAt DateTime?
+
+  @@index([connectedAccountId])
+  @@index([customerId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([connectedAccountId, status, createdAt])
+  @@map("payments")
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║  PAYMENT LINK                                                                ║
+// ║  Link de pago white-label generado por PayForce.                             ║
+// ║  El cliente accede a /pay/{token} y paga sin ver el branding de Stripe.      ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+
+model PaymentLink {
+  id    String @id @default(cuid())
+
+  // Token opaco para la URL pública: /pay/{token}
+  // Generado con crypto.randomBytes(16).toString('hex') → 32 chars
+  token String @unique
+
+  // El PaymentIntent se crea al generar el link (pre-creado para velocidad)
+  // Puede ser null si se usa "lazy creation" (se crea al abrir el link)
+  stripePaymentIntentId String? @unique // pi_xxx
+
+  // Merchant dueño del link
+  connectedAccountId String
+  connectedAccount   ConnectedAccount @relation(fields: [connectedAccountId], references: [id])
+
+  // Creado por un usuario de la plataforma (puede ser null si se crea via API)
+  createdById String?
+  createdBy   User?   @relation(fields: [createdById], references: [id])
+
+  // Importes en céntimos
+  amount               Int
+  currency             String @default("eur")
+  applicationFeeAmount Int    @default(0)
+
+  // ENUM: open | paid | expired | canceled
+  // · open     — activo, esperando pago
+  // · paid     — pago completado (via webhook payment_intent.succeeded)
+  // · expired  — pasó expiresAt sin pago (job cron o webhook)
+  // · canceled — cancelado manualmente
+  status String @default("open")
+
+  // Metadatos opcionales para el checkout
+  description  String?  // Se muestra al cliente en la página de pago
+  customerName String?  // Pre-rellenar nombre en el formulario
+  customerEmail String? // Pre-rellenar email
+
+  // Número máximo de usos (null = un solo uso)
+  maxUses   Int @default(1)
+  usedCount Int @default(0)
+
+  // Fecha de expiración (null = no expira)
+  expiresAt DateTime?
+
+  // Relación con el pago realizado (se rellena via webhook)
+  payments Payment[]
+
+  // Metadatos arbitrarios (referencia de pedido, plan, etc.) — JSON stringificado
+  metadata String?
+
+  // Integración embed / API externa
+  apiKeyId   String?
+  apiKey     ApiKey?  @relation(fields: [apiKeyId], references: [id])
+  successUrl String?
+  cancelUrl  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([token])
+  @@index([connectedAccountId])
+  @@index([status])
+  @@index([expiresAt])
+  @@index([apiKeyId])
+  @@index([connectedAccountId, status])
+  @@map("payment_links")
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║  API KEY                                                                     ║
+// ║  Claves para integraciones externas (ecommerce, SaaS, marketplaces)         ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+
+model ApiKey {
+  id        String @id @default(cuid())
+  label     String
+  keyPrefix String
+  keyHash   String @unique
+
+  connectedAccountId String
+  connectedAccount   ConnectedAccount @relation(fields: [connectedAccountId], references: [id])
+
+  isActive   Boolean   @default(true)
+  lastUsedAt DateTime?
+  expiresAt  DateTime?
+
+  paymentLinks PaymentLink[]
+
+  createdAt DateTime @default(now())
+
+  @@index([connectedAccountId])
+  @@index([keyHash])
+  @@map("api_keys")
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║  MERCHANT SPLIT                                                              ║
+// ║  Registro del reparto de cada pago con Destination Charges.                 ║
+// ║  · platformFee         → application_fee_amount cobrado por PayForce        ║
+// ║  · amountToPayMerchant → neto transferido automáticamente por Stripe        ║
+// ║  status siempre "paid": Stripe ejecuta la transferencia al hacer el cargo.  ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+
+model MerchantSplit {
+  id String @id @default(cuid())
+
+  paymentId String  @unique
+  payment   Payment @relation(fields: [paymentId], references: [id])
+
+  connectedAccountId String
+  connectedAccount   ConnectedAccount @relation(fields: [connectedAccountId], references: [id])
+
+  // Importes en céntimos
+  totalAmount         Int  // importe bruto cobrado al cliente
+  platformFee         Int  // 4% del total + 25 céntimos
+  amountToPayMerchant Int  // totalAmount - platformFee
+
+  // Con Destination Charges siempre es "paid" (Stripe transfiere automáticamente)
+  status String @default("paid")
+
+  paidAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([connectedAccountId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("merchant_splits")
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║  PAYOUT                                                                      ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+
+model Payout {
+  id String @id @default(cuid())
+
+  stripePayoutId String @unique // po_xxx
+
+  connectedAccountId String
+  connectedAccount   ConnectedAccount @relation(fields: [connectedAccountId], references: [id])
+
+  amount   Int
+  currency String @default("eur")
+
+  // ENUM: PENDING | IN_TRANSIT | PAID | FAILED | CANCELED
+  status String
+
+  // ENUM: STANDARD | INSTANT
+  method String @default("STANDARD")
+
+  arrivalDate DateTime
+
+  description    String?
+  failureCode    String?
+  failureMessage String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([connectedAccountId])
+  @@index([status])
+  @@index([arrivalDate])
+  @@map("payouts")
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║  DISPUTE                                                                     ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+
+model Dispute {
+  id String @id @default(cuid())
+
+  stripeDisputeId String @unique // dp_xxx
+
+  paymentId String
+  payment   Payment @relation(fields: [paymentId], references: [id])
+
+  connectedAccountId String
+  connectedAccount   ConnectedAccount @relation(fields: [connectedAccountId], references: [id])
+
+  amount   Int
+  currency String @default("eur")
+
+  // ENUM: NEEDS_RESPONSE | UNDER_REVIEW | WON | LOST | etc.
+  status String
+  reason String
+
+  evidenceDueBy       DateTime?
+  evidenceSubmittedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([connectedAccountId])
+  @@index([paymentId])
+  @@index([status])
+  @@index([connectedAccountId, status])
+  @@map("disputes")
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║  WEBHOOK EVENT — Log de idempotencia                                         ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+
+model WebhookEvent {
+  id          String   @id // evt_xxx — PK garantiza idempotencia
+  type        String
+  // ENUM: PROCESSED | FAILED | SKIPPED
+  status      String
+  processedAt DateTime @default(now())
+  error       String?
+
+  @@index([type])
+  @@index([status])
+  @@map("webhook_events")
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║  INSTANT PAYOUT REQUEST                                                      ║
+// ║  Solicitud de pago inmediato del merchant.                                   ║
+// ║  PayForce cobra 1,5% adicional sobre el importe solicitado.                  ║
+// ║  El dinero se transfiere al IBAN del merchant en minutos.                    ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+
+model InstantPayoutRequest {
+  id String @id @default(cuid())
+
+  connectedAccountId String
+  connectedAccount   ConnectedAccount @relation(fields: [connectedAccountId], references: [id])
+
+  // Importes en céntimos
+  requestedAmount Int   // importe bruto solicitado por el merchant
+  fee             Int   // 1,5% de comisión de PayForce por el servicio instant
+  netAmount       Int   // requestedAmount - fee  (lo que recibe el merchant)
+
+  currency String @default("eur")
+
+  // ENUM: PENDING | PROCESSING | COMPLETED | FAILED
+  status  String  @default("PENDING")
+
+  iban            String?   // IBAN destino (del stripeMetadata del merchant)
+  accountHolder   String?   // Titular de la cuenta
+  notes           String?   // Referencia interna
+
+  // Stripe payout ID si se procesó vía API
+  stripePayoutId  String?
+
+  processedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([connectedAccountId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("instant_payout_requests")
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║  FRAUD ALERT — Titan 1.4.1                                                   ║
+// ║  Registro de cada alerta generada por el motor de detección de fraude.       ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+
+model FraudAlert {
+  id String @id @default(cuid())
+
+  paymentId String
+  payment   Payment @relation(fields: [paymentId], references: [id])
+
+  connectedAccountId String
+  connectedAccount   ConnectedAccount @relation(fields: [connectedAccountId], references: [id])
+
+  riskScore  Int    // 0–100
+  // ENUM: LOW | MEDIUM | HIGH | CRITICAL
+  severity   String
+
+  // JSON: RiskFlag[] — señales disparadas
+  flags      String
+
+  // ENUM: FLAGGED | BLOCKED | REVIEWED | DISMISSED
+  status     String @default("FLAGGED")
+
+  reviewedBy String?   // userId del revisor
+  reviewedAt DateTime?
+  notes      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([connectedAccountId])
+  @@index([paymentId])
+  @@index([severity])
+  @@index([status])
+  @@index([createdAt])
+  @@index([connectedAccountId, severity, createdAt])
+  @@map("fraud_alerts")
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║  FRAUD RULE — Titan 1.4.1                                                    ║
+// ║  Reglas personalizables por el merchant para ajustar el scoring.             ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+
+model FraudRule {
+  id String @id @default(cuid())
+
+  connectedAccountId String
+  connectedAccount   ConnectedAccount @relation(fields: [connectedAccountId], references: [id])
+
+  // Nombre descriptivo de la regla
+  name     String
+  // ENUM: AMOUNT_THRESHOLD | VELOCITY | COUNTRY_BLOCK | NIGHT_HOURS | EMAIL_DOMAIN | CUSTOM
+  ruleType String
+
+  // Parámetros JSON (ej: { "threshold": 50000, "windowMinutes": 60, "maxCount": 3 })
+  params   String
+
+  // Puntos de riesgo que añade esta regla si se dispara
+  riskPoints Int @default(20)
+
+  // ENUM: FLAG | BLOCK
+  action   String @default("FLAG")
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([connectedAccountId])
+  @@index([isActive])
+  @@map("fraud_rules")
+}
+
+// Modelo Session eliminado — las sesiones son gestionadas por Supabase Auth.
+
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║  PRODUCT                                                                     ║
+// ║  Catálogo de productos/servicios del merchant.                               ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+
+model Product {
+  id                 String           @id @default(cuid())
+  connectedAccountId String
+  connectedAccount   ConnectedAccount @relation(fields: [connectedAccountId], references: [id])
+
+  name        String
+  description String?
+  imageUrl    String?
+  sku         String?
+  category    String?
+
+  // Precio en céntimos
+  price    Int
+  currency String @default("eur")
+
+  // ENUM: unit | hour | month | year | kg | item
+  unit     String @default("unit")
+
+  taxRate  Float  @default(0)    // % de IVA, ej. 21.0
+  stock    Int?                  // null = sin control de stock
+  active   Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  invoiceLines ManualInvoiceLine[]
+
+  @@index([connectedAccountId])
+  @@index([active])
+  @@map("products")
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║  MANUAL INVOICE                                                              ║
+// ║  Facturas creadas manualmente por el merchant (sin PaymentIntent).           ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+
+model ManualInvoice {
+  id                 String           @id @default(cuid())
+  connectedAccountId String
+  connectedAccount   ConnectedAccount @relation(fields: [connectedAccountId], references: [id])
+
+  invoiceNumber String   @unique
+  // ENUM: DRAFT | SENT | PAID | OVERDUE | CANCELLED
+  status        String   @default("DRAFT")
+
+  // Cliente
+  clientName    String
+  clientEmail   String?
+  clientAddress String?
+  clientTaxId   String?
+
+  // Fechas
+  issueDate  DateTime  @default(now())
+  dueDate    DateTime?
+
+  // Importes en céntimos
+  subtotal   Int   @default(0)
+  discount   Int   @default(0)  // céntimos de descuento
+  taxAmount  Int   @default(0)
+  total      Int   @default(0)
+  currency   String @default("eur")
+
+  // Notas y condiciones
+  notes        String?
+  paymentTerms String  @default("Pago inmediato")
+  bankAccount  String?
+
+  lines ManualInvoiceLine[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([connectedAccountId])
+  @@index([status])
+  @@index([issueDate])
+  @@map("manual_invoices")
+}
+
+model ManualInvoiceLine {
+  id              String        @id @default(cuid())
+  invoiceId       String
+  invoice         ManualInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  productId       String?
+  product         Product?      @relation(fields: [productId], references: [id])
+
+  description     String
+  quantity        Float         @default(1)
+  unitPrice       Int           // céntimos
+  taxRate         Float         @default(0)
+  total           Int           // céntimos (quantity * unitPrice)
+
+  position        Int           @default(0)
+
+  @@index([invoiceId])
+  @@map("manual_invoice_lines")
+}

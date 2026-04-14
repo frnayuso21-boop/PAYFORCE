@@ -1,0 +1,37 @@
+import { NextRequest, NextResponse } from "next/server";
+import { requireAuth }               from "@/lib/auth";
+import { db }                        from "@/lib/db";
+import Stripe                        from "stripe";
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2024-04-10" });
+
+export async function GET(req: NextRequest) {
+  try {
+    const { user } = await requireAuth(req);
+    const account  = await db.connectedAccount.findFirst({ where: { userId: user.id } });
+    if (!account) return NextResponse.json({ invoices: [] });
+
+    const customers = await db.customer.findMany({
+      where:  { connectedAccountId: account.id },
+      select: { stripeCustomerId: true },
+      take:   100,
+    });
+
+    if (customers.length === 0) return NextResponse.json({ invoices: [] });
+
+    const allInvoices: Stripe.Invoice[] = [];
+    for (const c of customers.slice(0, 20)) {
+      try {
+        const list = await stripe.invoices.list({ customer: c.stripeCustomerId, limit: 10 });
+        allInvoices.push(...list.data);
+      } catch { /* skip */ }
+    }
+
+    allInvoices.sort((a, b) => b.created - a.created);
+
+    return NextResponse.json({ invoices: allInvoices.slice(0, 50) });
+  } catch (err) {
+    console.error("[billing/invoices]", err);
+    return NextResponse.json({ error: "Error interno" }, { status: 500 });
+  }
+}
