@@ -18,7 +18,7 @@ type Stage = "idle" | "loading" | "done";
 type AnimPhase = "hex" | "check" | "text";
 
 export function TestPayCheckout({
-  token, amount, currency, description,
+  token, amount, currency, description, businessName,
 }: Props) {
   const [stage,     setStage]     = useState<Stage>("idle");
   const [animPhase, setAnimPhase] = useState<AnimPhase>("hex");

@@ -71,7 +71,7 @@ export default function SecurityPage() {
       const { data: factors } = await supabase.auth.mfa.listFactors();
       if (factors) {
         for (const f of factors.totp) {
-          if (f.status === "unverified") {
+          if ((f.status as string) === "unverified") {
             await supabase.auth.mfa.unenroll({ factorId: f.id });
           }
         }

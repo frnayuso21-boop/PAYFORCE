@@ -69,15 +69,13 @@ function InnerForm({ amount, currency }: { amount: number; currency: string }) {
         }
         onConfirm={handleExpressConfirm}
         options={{
-          buttonType:  { applePay: "buy", googlePay: "buy", paypal: "buynow", klarna: "pay" },
+          buttonType:  { applePay: "buy", googlePay: "buy", paypal: "buynow" } as Record<string, string>,
           buttonTheme: { applePay: "black", googlePay: "black" },
           paymentMethods: {
             applePay:  "always",
             googlePay: "always",
             link:      "auto",
             paypal:    "auto",
-            klarna:    "auto",
-            amazonPay: "auto",
           },
           layout: { maxColumns: 2, maxRows: 1, overflow: "auto" },
         }}

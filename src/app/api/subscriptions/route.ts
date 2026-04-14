@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
     });
 
     // 4. Crear suscripción
-    const subParams: Parameters<typeof stripe.subscriptions.create>[0] = {
+    const subParams: Record<string, unknown> = {
       customer:          customer.id,
       items:             [{ price: price.id }],
       payment_behavior:  "default_incomplete",
@@ -77,7 +77,8 @@ export async function POST(req: NextRequest) {
     };
     if (trialDays && trialDays > 0) subParams.trial_period_days = trialDays;
 
-    const subscription = await stripe.subscriptions.create(subParams);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const subscription = await stripe.subscriptions.create(subParams as any);
 
     const invoice = subscription.latest_invoice as {
       payment_intent?: { client_secret?: string | null } | null
@@ -113,10 +114,14 @@ export async function GET(req: NextRequest) {
     const mine = list.data.filter((s) => s.metadata?.merchantUserId === user.id);
 
     const result = mine.map((s) => {
+      const sub     = s as unknown as Record<string, unknown>;
       const item    = s.items.data[0];
       const price   = item?.price;
       const product = price?.product as { name?: string } | undefined;
       const cust    = s.customer as { email?: string; name?: string } | string;
+      const periodEnd = (sub.current_period_end as number) ?? 0;
+      const trialEnd  = sub.trial_end as number | null;
+      const cancelAt  = sub.cancel_at as number | null;
       return {
         id:           s.id,
         status:       s.status,
@@ -127,9 +132,9 @@ export async function GET(req: NextRequest) {
         productName:  product?.name,
         customerEmail: typeof cust === "string" ? cust : cust.email,
         customerName:  typeof cust === "string" ? ""   : cust.name,
-        currentPeriodEnd: new Date(s.current_period_end * 1000).toISOString(),
-        trialEnd:     s.trial_end ? new Date(s.trial_end * 1000).toISOString() : null,
-        cancelAt:     s.cancel_at ? new Date(s.cancel_at * 1000).toISOString() : null,
+        currentPeriodEnd: new Date(periodEnd * 1000).toISOString(),
+        trialEnd:     trialEnd ? new Date(trialEnd * 1000).toISOString() : null,
+        cancelAt:     cancelAt ? new Date(cancelAt * 1000).toISOString() : null,
       };
     });
 
