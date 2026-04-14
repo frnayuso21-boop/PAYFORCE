@@ -1,11 +1,11 @@
 export function HeroHeadline() {
   return (
     <h1
-      className="text-center text-[52px] leading-[1.04] text-black md:text-[100px] md:leading-[1.0]"
+      className="text-center text-[40px] leading-[1.05] text-black md:text-[76px] md:leading-[1.0]"
       style={{
         letterSpacing: "-0.05em",
         fontWeight:    200,
-        maxWidth:      1000,
+        maxWidth:      860,
       }}
     >
       Building happy business

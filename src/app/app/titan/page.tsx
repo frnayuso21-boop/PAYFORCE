@@ -114,99 +114,188 @@ function ScoreGauge({ score }: { score: number }) {
   );
 }
 
-// ─── Radar SVG animado ────────────────────────────────────────────────────────
+// ─── Panel KYC (Stripe Identity) ─────────────────────────────────────────────
 
-function FraudRadar({ alerts }: { alerts: TitanAlert[] }) {
-  const cx = 160, cy = 160, maxR = 140;
+const KYC_STATUS: Record<string, { label: string; icon: React.ElementType; color: string; bg: string }> = {
+  verified:        { label: "Verificado",    icon: UserCheck, color: "text-emerald-700", bg: "bg-emerald-50"  },
+  processing:      { label: "Procesando",    icon: Clock,     color: "text-blue-700",    bg: "bg-blue-50"     },
+  requires_input:  { label: "Acción req.",   icon: AlertTriangle, color: "text-amber-700",  bg: "bg-amber-50"  },
+  canceled:        { label: "Cancelada",     icon: UserX,     color: "text-slate-500",   bg: "bg-slate-50"    },
+};
 
-  // Convertir las últimas 20 alertas en puntos en el radar
-  const dots = alerts.slice(0, 20).map((a, i) => {
-    const angle = (i / 20) * 2 * Math.PI - Math.PI / 2;
-    const r = (a.riskScore / 100) * maxR;
-    return {
-      x:        cx + r * Math.cos(angle),
-      y:        cy + r * Math.sin(angle),
-      score:    a.riskScore,
-      severity: a.severity,
-      id:       a.id,
-    };
-  });
+type KycSession = {
+  id: string; status: string; type: string; created: number;
+  url: string | null; lastError: string | null;
+  metadata: Record<string, string>;
+};
+
+function KycPanel() {
+  const [sessions, setSessions] = useState<KycSession[]>([]);
+  const [loading,  setLoading]  = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [form,     setForm]     = useState({ customerEmail: "", customerName: "" });
+  const [error,    setError]    = useState("");
+
+  const loadSessions = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch("/api/titan/kyc");
+      if (r.ok) { const d = await r.json(); setSessions(d.sessions ?? []); }
+    } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { loadSessions(); }, [loadSessions]);
+
+  async function createSession() {
+    setError("");
+    setCreating(true);
+    try {
+      const res = await fetch("/api/titan/kyc", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          customerEmail: form.customerEmail,
+          customerName:  form.customerName,
+          returnUrl:     window.location.href,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? "Error al crear sesión"); return; }
+      if (data.url) window.open(data.url, "_blank");
+      setShowForm(false);
+      setForm({ customerEmail: "", customerName: "" });
+      await loadSessions();
+    } catch { setError("Error de red"); }
+    finally { setCreating(false); }
+  }
 
   return (
-    <div className="relative flex items-center justify-center">
-      <svg width="320" height="320" viewBox="0 0 320 320" className="select-none">
-        {/* Anillos concéntricos */}
-        {[0.25, 0.5, 0.75, 1].map((f) => (
-          <circle
-            key={f}
-            cx={cx} cy={cy} r={maxR * f}
-            fill="none" stroke="#e2e8f0"
-            strokeWidth={f === 1 ? 1.5 : 1}
-            strokeDasharray={f < 1 ? "4 6" : "none"}
-          />
-        ))}
+    <div className="rounded-2xl border border-slate-100 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-50">
+            <Fingerprint className="h-5 w-5 text-indigo-600" />
+          </div>
+          <div>
+            <p className="text-[14px] font-semibold text-slate-900">Verificación de identidad (KYC)</p>
+            <p className="text-[11px] text-slate-400">Powered by Stripe Identity · Documento + selfie</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={loadSessions} className="rounded-lg border border-slate-200 p-2 hover:bg-slate-50 transition">
+            <RefreshCw className="h-3.5 w-3.5 text-slate-400" />
+          </button>
+          <button
+            onClick={() => setShowForm(true)}
+            className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3 py-2 text-[12px] font-semibold text-white hover:bg-indigo-700 transition"
+          >
+            <Plus className="h-3.5 w-3.5" /> Nueva verificación
+          </button>
+        </div>
+      </div>
 
-        {/* Ejes */}
-        {[0, 45, 90, 135].map((deg) => {
-          const rad = (deg * Math.PI) / 180;
-          return (
-            <line
-              key={deg}
-              x1={cx - maxR * Math.cos(rad)} y1={cy - maxR * Math.sin(rad)}
-              x2={cx + maxR * Math.cos(rad)} y2={cy + maxR * Math.sin(rad)}
-              stroke="#e2e8f0" strokeWidth="1"
-            />
-          );
-        })}
+      {/* Formulario nueva sesión */}
+      {showForm && (
+        <div className="border-b border-slate-100 bg-indigo-50/40 px-6 py-5">
+          <p className="text-[13px] font-semibold text-indigo-800 mb-4">Iniciar verificación de identidad</p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Nombre del cliente</label>
+              <input
+                value={form.customerName}
+                onChange={(e) => setForm((p) => ({ ...p, customerName: e.target.value }))}
+                placeholder="Ej. Juan García"
+                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-indigo-400"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Email del cliente</label>
+              <input
+                type="email"
+                value={form.customerEmail}
+                onChange={(e) => setForm((p) => ({ ...p, customerEmail: e.target.value }))}
+                placeholder="cliente@email.com"
+                className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[13px] outline-none focus:ring-2 focus:ring-indigo-400"
+              />
+            </div>
+          </div>
+          {error && <p className="mt-2 text-[12px] text-red-600">{error}</p>}
+          <p className="mt-2 text-[11px] text-slate-400">
+            Se abrirá la verificación de Stripe. El cliente sube su documento y una selfie. El resultado aparecerá en esta lista.
+          </p>
+          <div className="mt-3 flex gap-2">
+            <button
+              onClick={createSession}
+              disabled={creating}
+              className="flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2 text-[13px] font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 transition"
+            >
+              {creating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+              {creating ? "Creando…" : "Iniciar verificación"}
+            </button>
+            <button onClick={() => { setShowForm(false); setError(""); }}
+              className="rounded-xl border border-slate-200 px-4 py-2 text-[13px] text-slate-500 hover:bg-slate-50 transition">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
 
-        {/* Etiquetas de anillos */}
-        <text x={cx + maxR * 0.25 + 4} y={cy - 4} fontSize="8" fill="#94a3b8">25</text>
-        <text x={cx + maxR * 0.5 + 4}  y={cy - 4} fontSize="8" fill="#94a3b8">50</text>
-        <text x={cx + maxR * 0.75 + 4} y={cy - 4} fontSize="8" fill="#94a3b8">75</text>
-        <text x={cx + maxR + 4}        y={cy - 4} fontSize="8" fill="#94a3b8">100</text>
-
-        {/* Zona de riesgo crítico (radio > 80%) */}
-        <circle cx={cx} cy={cy} r={maxR} fill="url(#dangerZone)" opacity="0.08" />
-        <defs>
-          <radialGradient id="dangerZone" cx="50%" cy="50%" r="50%">
-            <stop offset="80%" stopColor="#ef4444" stopOpacity="0" />
-            <stop offset="100%" stopColor="#ef4444" stopOpacity="1" />
-          </radialGradient>
-        </defs>
-
-        {/* Barrido animado del radar */}
-        <defs>
-          <linearGradient id="sweep" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%"   stopColor="#6366f1" stopOpacity="0" />
-            <stop offset="100%" stopColor="#6366f1" stopOpacity="0.35" />
-          </linearGradient>
-        </defs>
-        <g style={{ transformOrigin: `${cx}px ${cy}px`, animation: "spin 4s linear infinite" }}>
-          <path
-            d={`M ${cx} ${cy} L ${cx + maxR} ${cy} A ${maxR} ${maxR} 0 0 0 ${cx + maxR * Math.cos(-Math.PI / 8)} ${cy + maxR * Math.sin(-Math.PI / 8)} Z`}
-            fill="url(#sweep)"
-          />
-        </g>
-
-        {/* Puntos de alertas */}
-        {dots.map((d) => {
-          const cfg = SEVERITY_CONFIG[d.severity as keyof typeof SEVERITY_CONFIG] ?? SEVERITY_CONFIG.LOW;
-          return (
-            <g key={d.id}>
-              <circle cx={d.x} cy={d.y} r={6} fill={cfg.color} opacity="0.25" />
-              <circle cx={d.x} cy={d.y} r={3.5} fill={cfg.color} />
-            </g>
-          );
-        })}
-
-        {/* Centro */}
-        <circle cx={cx} cy={cy} r={5} fill="#6366f1" />
-        <circle cx={cx} cy={cy} r={10} fill="#6366f1" opacity="0.15" />
-      </svg>
-
-      <style>{`
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-      `}</style>
+      {/* Lista sesiones */}
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <RefreshCw className="h-5 w-5 animate-spin text-slate-300" />
+        </div>
+      ) : sessions.length === 0 ? (
+        <div className="flex flex-col items-center py-12 text-center">
+          <Fingerprint className="h-10 w-10 text-slate-200 mb-3" />
+          <p className="text-[14px] font-semibold text-slate-600">Sin verificaciones aún</p>
+          <p className="text-[12px] text-slate-400 mt-1">Pulsa "Nueva verificación" para iniciar el proceso KYC de un cliente.</p>
+        </div>
+      ) : (
+        <div className="divide-y divide-slate-50">
+          {sessions.map((s) => {
+            const cfg = KYC_STATUS[s.status] ?? { label: s.status, icon: Clock, color: "text-slate-500", bg: "bg-slate-50" };
+            const Icon = cfg.icon;
+            return (
+              <div key={s.id} className="flex items-center gap-4 px-6 py-3.5 hover:bg-slate-50 transition">
+                <div className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg", cfg.bg)}>
+                  <Icon className={cn("h-4 w-4", cfg.color)} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={cn("inline-block rounded-full px-2.5 py-0.5 text-[11px] font-semibold", cfg.bg, cfg.color)}>
+                      {cfg.label}
+                    </span>
+                    {s.metadata?.customerName && (
+                      <span className="text-[13px] font-medium text-slate-700">{s.metadata.customerName}</span>
+                    )}
+                    {s.metadata?.customerEmail && (
+                      <span className="text-[12px] text-slate-400">{s.metadata.customerEmail}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 mt-0.5">
+                    <span className="font-mono text-[10px] text-slate-400">{s.id}</span>
+                    <span className="text-[11px] text-slate-400">
+                      {new Date(s.created * 1000).toLocaleDateString("es-ES", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                    {s.lastError && (
+                      <span className="text-[11px] text-red-500">{s.lastError}</span>
+                    )}
+                  </div>
+                </div>
+                {s.url && (
+                  <a href={s.url} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-[11px] text-slate-500 hover:bg-slate-100 transition shrink-0">
+                    <ExternalLink className="h-3 w-3" /> Abrir
+                  </a>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -378,66 +467,34 @@ export default function TitanPage() {
         })}
       </div>
 
-      {/* ── Radar + Top señales ──────────────────────────────────────────────── */}
+      {/* ── KYC + Top señales ────────────────────────────────────────────────── */}
       <div className="grid gap-4 lg:grid-cols-5">
 
-        {/* Radar visual */}
-        <div className="lg:col-span-2 rounded-2xl border border-slate-100 bg-white p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)] flex flex-col items-center">
-          <div className="w-full flex items-center justify-between mb-4">
-            <div>
-              <p className="text-[13px] font-semibold text-slate-800">Radar de fraude</p>
-              <p className="text-[11px] text-slate-400">Últimas {alerts.length} alertas</p>
-            </div>
-            <div className="flex flex-col items-end gap-1">
-              {(["CRITICAL","HIGH","MEDIUM","LOW"] as const).map((sev) => {
-                const cfg = SEVERITY_CONFIG[sev];
-                return (
-                  <div key={sev} className="flex items-center gap-1.5">
-                    <span className={cn("h-2 w-2 rounded-full", cfg.dot.replace(" animate-pulse", ""))} />
-                    <span className="text-[10px] text-slate-400">{cfg.label}</span>
-                  </div>
-                );
-              })}
-            </div>
+        {/* Score promedio */}
+        <div className="lg:col-span-2 rounded-2xl border border-slate-100 bg-white p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)] flex flex-col items-center justify-center gap-4">
+          <p className="text-[13px] font-semibold text-slate-800 self-start">Score de riesgo medio</p>
+          <ScoreGauge score={stats?.avgScore ?? 0} />
+          <div className="text-center">
+            <p className="text-[12px] font-semibold text-slate-700">últimos 30 días</p>
+            <p className="text-[11px] text-slate-400 mt-0.5">{stats?.totalReviewed ?? 0} pagos analizados</p>
           </div>
-          <FraudRadar alerts={alerts} />
-          {/* Score promedio */}
-          <div className="mt-4 flex items-center gap-3">
-            <ScoreGauge score={stats?.avgScore ?? 0} />
-            <div>
-              <p className="text-[11px] text-slate-400">Score promedio</p>
-              <p className="text-[12px] font-semibold text-slate-700">últimos 30 días</p>
-            </div>
+          <div className="w-full space-y-1.5">
+            {(["CRITICAL","HIGH","MEDIUM","LOW"] as const).map((sev) => {
+              const cfg   = SEVERITY_CONFIG[sev];
+              const count = stats?.severityBreakdown[sev] ?? 0;
+              return (
+                <div key={sev} className="flex items-center gap-2">
+                  <span className={cn("h-2 w-2 rounded-full shrink-0", cfg.dot.replace(" animate-pulse",""))} />
+                  <span className="text-[11px] text-slate-500 flex-1">{cfg.label}</span>
+                  <span className="text-[11px] font-bold text-slate-700 tabular-nums">{count}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
 
         {/* Top señales + distribución */}
         <div className="lg:col-span-3 space-y-4">
-
-          {/* Distribución por severidad */}
-          <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-            <p className="text-[13px] font-semibold text-slate-800 mb-4">Distribución por severidad</p>
-            <div className="space-y-2.5">
-              {(["CRITICAL","HIGH","MEDIUM","LOW"] as const).map((sev) => {
-                const cfg   = SEVERITY_CONFIG[sev];
-                const count = stats?.severityBreakdown[sev] ?? 0;
-                const total = Object.values(stats?.severityBreakdown ?? {}).reduce((a, b) => a + b, 0);
-                const pct   = total > 0 ? Math.round((count / total) * 100) : 0;
-                return (
-                  <div key={sev} className="flex items-center gap-3">
-                    <span className="w-14 text-[11px] font-semibold text-slate-500 text-right">{cfg.label}</span>
-                    <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all duration-700"
-                        style={{ width: `${pct}%`, background: cfg.color }}
-                      />
-                    </div>
-                    <span className="w-8 text-right text-[11px] font-bold tabular-nums text-slate-600">{count}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
 
           {/* Top señales más frecuentes */}
           <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
@@ -470,6 +527,9 @@ export default function TitanPage() {
           </div>
         </div>
       </div>
+
+      {/* ── KYC Panel ───────────────────────────────────────────────────────── */}
+      <KycPanel />
 
       {/* ── Tabs: Alertas / Reglas ───────────────────────────────────────────── */}
       <div className="rounded-2xl border border-slate-100 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.04)] overflow-hidden">

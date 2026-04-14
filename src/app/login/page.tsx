@@ -250,21 +250,12 @@ export default function LoginPage() {
           </div>
 
           <Suspense fallback={
-            <Card>
-              <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                Cargando…
-              </CardContent>
-            </Card>
+            <div className="py-8 text-center text-sm text-slate-400">
+              Cargando…
+            </div>
           }>
             <LoginForm />
           </Suspense>
-
-          <p className="mt-6 text-center text-xs text-slate-400">
-            ¿No tienes cuenta?{" "}
-            <Link href="/signup" className="font-medium text-slate-700 underline underline-offset-2 hover:text-slate-900">
-              Crear cuenta gratis
-            </Link>
-          </p>
         </div>
       </div>
     </main>
