@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
       }
 
       const Stripe = (await import("stripe")).default;
-      const srcStripe = new Stripe(stripe_secret, { apiVersion: "2024-06-20" });
+      const srcStripe = new Stripe(stripe_secret, { apiVersion: "2026-02-25.clover" as const });
 
       // --- Clientes ---
       let customersCursor: string | undefined;

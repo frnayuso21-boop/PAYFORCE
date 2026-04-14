@@ -1,5 +1,4 @@
 import type { NextConfig } from "next";
-import path from "path";
 
 const nextConfig: NextConfig = {
   serverExternalPackages: ["@prisma/client", "prisma"],
@@ -18,6 +17,10 @@ const nextConfig: NextConfig = {
     tsconfigPath: "tsconfig.json",
   },
 
+  outputFileTracingExcludes: {
+    "*": ["payforce-migrate/**", "payforcesystems/**", "scripts/**"],
+  },
+
   webpack: (config) => {
     config.watchOptions = {
       ...config.watchOptions,
@@ -28,16 +31,6 @@ const nextConfig: NextConfig = {
       ],
     };
     return config;
-  },
-
-  experimental: {
-    outputFileTracingExcludes: {
-      "*": [
-        path.join(__dirname, "payforce-migrate"),
-        path.join(__dirname, "payforcesystems"),
-        path.join(__dirname, "scripts"),
-      ],
-    },
   },
 };
 
