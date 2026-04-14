@@ -36,9 +36,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const cfg = account?.invoiceSettings;
 
     const doc    = createElement(ManualInvoiceDocument, { invoice, settings: cfg ?? null });
-    const stream = await renderToStream(doc);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const stream = await renderToStream(doc as any);
 
-    // @ts-expect-error Node readable stream
     const readable = new ReadableStream({
       start(controller) {
         stream.on("data",  (chunk: Buffer) => controller.enqueue(chunk));
