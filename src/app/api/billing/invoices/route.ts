@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
 
     const allInvoices: Stripe.Invoice[] = [];
     for (const c of customers.slice(0, 20)) {
+      if (!c.stripeCustomerId) continue;
       try {
         const list = await stripe.invoices.list({ customer: c.stripeCustomerId, limit: 10 });
         allInvoices.push(...list.data);
