@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { renderToStream }            from "@react-pdf/renderer";
 import { createElement }             from "react";
 import { db }                        from "@/lib/db";
-import { getServerSession }          from "next-auth";
-import { authOptions }               from "@/lib/auth";
+import { requireAuth, AuthError }    from "@/lib/auth";
 import { InvoiceDocument }           from "@/lib/invoice-pdf";
 import type { InvoiceData }          from "@/lib/invoice-pdf";
 
@@ -11,8 +10,14 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ paymentId: string }> },
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.email) {
+  let userEmail: string;
+  try {
+    const { user } = await requireAuth(req);
+    userEmail = user.email;
+  } catch (err) {
+    if (err instanceof AuthError) {
+      return NextResponse.json({ error: err.message }, { status: err.status });
+    }
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -36,7 +41,7 @@ export async function GET(
   }
 
   const ownerEmail = payment.connectedAccount?.user?.email ?? payment.connectedAccount?.email;
-  if (ownerEmail !== session.user.email) {
+  if (ownerEmail !== userEmail) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
