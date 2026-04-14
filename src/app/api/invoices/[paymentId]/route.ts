@@ -96,7 +96,6 @@ export async function GET(
   const stream = await renderToStream(doc as any);
   const filename = `factura-${invoiceNumber}.pdf`;
 
-  // @ts-expect-error renderToStream returns a Node.js readable stream
   const readable = new ReadableStream({
     start(controller) {
       stream.on("data",  (chunk: Buffer) => controller.enqueue(chunk));
