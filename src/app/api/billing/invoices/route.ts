@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth }               from "@/lib/auth";
 import { db }                        from "@/lib/db";
 import { stripe }                    from "@/lib/stripe";
+import type Stripe                   from "stripe";
 
 export async function GET(req: NextRequest) {
   try {
