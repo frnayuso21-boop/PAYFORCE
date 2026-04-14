@@ -48,7 +48,6 @@ export async function GET(
   const cfg = payment.connectedAccount?.invoiceSettings;
   const acc = payment.connectedAccount;
 
-  // Número de factura: si tiene settings usamos prefix + número incremental
   const prefix = cfg?.invoicePrefix ?? "PF";
   const num    = cfg?.nextInvoiceNumber ?? 1;
   const year   = payment.createdAt.getFullYear();
@@ -59,7 +58,6 @@ export async function GET(
     invoiceNumber,
     invoiceDate:     payment.createdAt.toISOString(),
     status:          payment.status,
-    // Merchant: primero usa settings personalizados, luego ConnectedAccount
     merchantName:    cfg?.companyName   || acc?.businessName || "Merchant",
     merchantEmail:   cfg?.email         || acc?.email        || ownerEmail || "",
     merchantCountry: cfg?.country       || acc?.country      || "ES",
@@ -74,10 +72,8 @@ export async function GET(
     invoiceNotes:    cfg?.invoiceNotes  || "",
     paymentTerms:    cfg?.paymentTerms  || "Pago inmediato",
     bankAccount:     cfg?.bankAccount   || "",
-    // Cliente
     customerName:    payment.customerName ?? payment.customer?.name,
     customerEmail:   payment.customerEmail ?? payment.customer?.email,
-    // Pago
     paymentId:       payment.id,
     stripeId:        payment.stripePaymentIntentId,
     description:     payment.description ?? undefined,
@@ -88,7 +84,6 @@ export async function GET(
     createdAt:       (payment.stripeCreatedAt ?? payment.createdAt).toISOString(),
   };
 
-  // Incrementa el contador (fire-and-forget)
   if (cfg) {
     db.invoiceSettings.update({
       where: { id: cfg.id },
