@@ -92,7 +92,8 @@ export async function GET(
   }
 
   const doc    = createElement(InvoiceDocument, { d: data });
-  const stream = await renderToStream(doc);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const stream = await renderToStream(doc as any);
   const filename = `factura-${invoiceNumber}.pdf`;
 
   // @ts-expect-error renderToStream returns a Node.js readable stream
