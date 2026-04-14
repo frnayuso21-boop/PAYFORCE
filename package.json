@@ -63,7 +63,6 @@
     "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
-    "@next/swc-darwin-arm64": "15.1.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
