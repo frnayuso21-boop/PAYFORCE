@@ -318,23 +318,23 @@ export function TimelineSections() {
                         {s.tag}
                       </span>
                     </div>
-                    <h2 className="text-[36px] leading-tight md:text-[46px]"
+                    <h2 className="text-[40px] leading-tight md:text-[52px]"
                       style={{ letterSpacing: "-0.025em", fontWeight: 400, color: INK }}>
                       {s.title}
                     </h2>
-                    <p className="text-[16px] leading-relaxed" style={{ color: MUTE }}>
+                    <p className="text-[18px] leading-relaxed" style={{ color: MUTE }}>
                       {s.body}
                     </p>
                     <ul className="flex flex-col gap-2">
                       {s.bullets.map(b => (
                         <li key={b} className="flex items-start gap-2.5">
                           <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" style={{ color: s.color, opacity: 0.7 }} />
-                          <span className="text-[13px] leading-relaxed" style={{ color: MUTE }}>{b}</span>
+                          <span className="text-[15px] leading-relaxed" style={{ color: MUTE }}>{b}</span>
                         </li>
                       ))}
                     </ul>
                     <Link href={s.href}
-                      className="inline-flex items-center gap-1.5 text-[13px] transition-opacity hover:opacity-60 mt-1"
+                      className="inline-flex items-center gap-1.5 text-[14px] transition-opacity hover:opacity-60 mt-1"
                       style={{ color: INK }}>
                       {s.cta} <ArrowRight className="h-3.5 w-3.5" />
                     </Link>

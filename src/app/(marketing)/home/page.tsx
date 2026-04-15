@@ -39,15 +39,15 @@ export default function HomePage() {
           <HeroHeadline />
 
           {/* Subtítulo */}
-          <p className="mt-4 text-center text-[15px] leading-relaxed md:text-[18px]"
-            style={{ color: "rgba(0,0,0,0.42)", maxWidth: 480, fontWeight: 400 }}>
+          <p className="mt-4 text-center text-[17px] leading-relaxed md:text-[21px]"
+            style={{ color: "rgba(0,0,0,0.42)", maxWidth: 520, fontWeight: 400 }}>
             Abre tu cuenta en 30 segundos. Crea un link de pago y empieza a cobrar sin límites.
           </p>
 
           {/* CTAs */}
           <div className="mt-6 flex items-center justify-center gap-3 flex-wrap">
             <Link href="/signup"
-              className="inline-flex items-center gap-2 rounded-full px-6 py-3 text-[14px] font-medium text-white transition-all hover:opacity-85 active:scale-[0.98]"
+              className="inline-flex items-center gap-2 rounded-full px-7 py-3.5 text-[15px] font-medium text-white transition-all hover:opacity-85 active:scale-[0.98]"
               style={{
                 background: "linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)",
                 boxShadow: "0 4px 20px rgba(99,102,241,0.35), 0 1px 4px rgba(139,92,246,0.25)",
@@ -56,7 +56,7 @@ export default function HomePage() {
               <ArrowRight className="h-4 w-4 opacity-80" />
             </Link>
             <Link href="/solutions"
-              className="inline-flex items-center gap-2 rounded-full px-6 py-3 text-[14px] font-medium text-white transition-all hover:opacity-85 active:scale-[0.98]"
+              className="inline-flex items-center gap-2 rounded-full px-7 py-3.5 text-[15px] font-medium text-white transition-all hover:opacity-85 active:scale-[0.98]"
               style={{
                 background: "linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%)",
                 boxShadow: "0 4px 20px rgba(14,165,233,0.30), 0 1px 4px rgba(6,182,212,0.20)",
@@ -109,23 +109,23 @@ export default function HomePage() {
           style={{ background: "radial-gradient(ellipse 130% 40% at 50% 50%, rgba(100,40,200,0.13) 0%, transparent 70%)" }} />
 
         <div className="relative z-10 mx-auto max-w-xl">
-          <h2 className="text-[26px] leading-tight text-white md:text-[46px]"
+          <h2 className="text-[30px] leading-tight text-white md:text-[52px]"
             style={{ letterSpacing: "-0.025em", fontWeight: 400 }}>
             Lista en minutos.<br />
             <span style={{ color: "rgba(255,255,255,0.35)" }}>Escala sin límites.</span>
           </h2>
-          <p className="mx-auto mt-3 max-w-sm text-[14px] leading-relaxed md:mt-4 md:text-[16px]"
+          <p className="mx-auto mt-3 max-w-sm text-[16px] leading-relaxed md:mt-4 md:text-[18px]"
             style={{ color: "rgba(255,255,255,0.40)" }}>
             Sin tarjeta de crédito. Sin permanencia. Cancela cuando quieras.
           </p>
           <div className="mt-6 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
             <Link href="/signup"
-              className="inline-flex w-full items-center justify-center gap-2 rounded-full px-7 py-3 text-[14px] font-medium transition-opacity hover:opacity-85 sm:w-auto"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-full px-7 py-3.5 text-[15px] font-medium transition-opacity hover:opacity-85 sm:w-auto"
               style={{ background: "#ffffff", color: "#111111" }}>
               Crear cuenta gratis <ArrowRight className="h-4 w-4" />
             </Link>
             <Link href="/about#contact"
-              className="inline-flex w-full items-center justify-center gap-2 rounded-full px-7 py-3 text-[14px] transition-all hover:opacity-70 sm:w-auto"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-full px-7 py-3.5 text-[15px] transition-all hover:opacity-70 sm:w-auto"
               style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.65)" }}>
               Hablar con ventas
             </Link>

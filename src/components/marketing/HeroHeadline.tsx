@@ -1,7 +1,7 @@
 export function HeroHeadline() {
   return (
     <h1
-      className="text-center text-[40px] leading-[1.05] text-black md:text-[76px] md:leading-[1.0]"
+      className="text-center text-[46px] leading-[1.05] text-black md:text-[88px] md:leading-[1.0]"
       style={{
         letterSpacing: "-0.05em",
         fontWeight:    200,
