@@ -19,6 +19,7 @@ const PLAN_PRICES: Record<string, string> = {
  */
 export async function POST(req: NextRequest) {
   try {
+    console.log("[billing/checkout] DATABASE_URL:", process.env.DATABASE_URL?.slice(0, 60) + "…");
     const { user } = await requireAuth(req);
 
     const body = await req.json() as { plan?: string };
