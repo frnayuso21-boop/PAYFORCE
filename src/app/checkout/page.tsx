@@ -5,11 +5,7 @@ import { Check, ArrowLeft, Lock, Shield, Headphones } from "lucide-react";
 import { mockPlans } from "@/mock";
 import { formatCurrency } from "@/lib/utils";
 import { cn } from "@/lib/utils";
-// TODO: implementar con Stripe Subscriptions + Customer Portal.
-// El checkout de suscripciones de PayForce no usa destination charges
-// (el dinero va a la cuenta de la plataforma, no a un connected account).
-// Siguiente paso: crear productos/precios en Stripe Dashboard y usar
-// stripe.checkout.sessions.create({ mode: "subscription", ... })
+import { CheckoutButton } from "./CheckoutButton";
 
 export const metadata: Metadata = { title: "Checkout — PayForce" };
 
@@ -113,20 +109,18 @@ export default async function CheckoutPage({ searchParams }: CheckoutPageProps) 
               </div>
             </div>
 
-            {/* Card: formulario de pago */}
+            {/* Card: botón de pago */}
             <div className="rounded-2xl bg-white shadow-[0_2px_16px_rgba(0,0,0,0.06)] overflow-hidden">
               <div className="border-b border-slate-100 px-6 py-4">
                 <h2 className="text-sm font-semibold text-slate-900 tracking-tight">
-                  Datos de pago
+                  Confirmar suscripción
                 </h2>
+                <p className="mt-0.5 text-xs text-slate-400">
+                  Serás redirigido al proceso de pago seguro
+                </p>
               </div>
               <div className="p-6">
-                <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-4 text-sm text-amber-700">
-                  <p className="font-semibold">Pendiente de implementar</p>
-                  <p className="mt-1 text-xs text-amber-600">
-                    El checkout de suscripciones de PayForce estará disponible próximamente.
-                  </p>
-                </div>
+                <CheckoutButton plan={selected.id.replace("plan_", "")} planName={selected.name} />
               </div>
             </div>
           </div>

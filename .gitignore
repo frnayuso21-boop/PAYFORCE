@@ -39,3 +39,7 @@ Thumbs.db
 payforce-migrate
 payforcesystems
 scripts/*.mjs
+
+.env.local
+env local
+.env

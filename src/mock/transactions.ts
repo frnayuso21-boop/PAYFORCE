@@ -122,7 +122,7 @@ export const mockPlans = [
     price:         49,
     currency:      "eur",
     interval:      "month" as const,
-    stripePriceId: "price_starter_monthly",
+    stripePriceId: "price_1TMUAgKd9t7mkjK9oDz7zMPR",
     features: [
       "Hasta 100 transacciones/mes",
       "1 cuenta Stripe Connect",
@@ -136,7 +136,7 @@ export const mockPlans = [
     price:         299,
     currency:      "eur",
     interval:      "month" as const,
-    stripePriceId: "price_pro_monthly",
+    stripePriceId: "price_1TMUAgKd9t7mkjK9oDz7zMPR",
     popular:       true,
     features: [
       "Transacciones ilimitadas",
@@ -153,7 +153,7 @@ export const mockPlans = [
     price:         899,
     currency:      "eur",
     interval:      "month" as const,
-    stripePriceId: "price_enterprise_monthly",
+    stripePriceId: "price_1TMUAgKd9t7mkjK9oDz7zMPR",
     features: [
       "Todo de Pro",
       "Cuentas Connect ilimitadas",
