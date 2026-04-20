@@ -152,6 +152,36 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // ── Sincronización defensiva con Stripe en producción ────────────────────
+    // En la práctica, `chargesEnabled` puede quedar stale si el webhook account.updated
+    // no llegó o si el usuario no ha pasado por /api/connect/status. Antes de decidir
+    // "modo test", intentamos refrescar el estado directamente desde Stripe.
+    if (
+      account.stripeAccountId &&
+      !account.stripeAccountId.startsWith("local_") &&
+      !account.chargesEnabled
+    ) {
+      try {
+        const stripeAccount = await stripe.accounts.retrieve(account.stripeAccountId);
+        await db.connectedAccount.update({
+          where: { id: account.id },
+          data: {
+            chargesEnabled:   stripeAccount.charges_enabled ?? false,
+            payoutsEnabled:   stripeAccount.payouts_enabled ?? false,
+            detailsSubmitted: stripeAccount.details_submitted ?? false,
+          },
+        });
+        account = {
+          ...account,
+          chargesEnabled:   stripeAccount.charges_enabled ?? false,
+          payoutsEnabled:   stripeAccount.payouts_enabled ?? false,
+          detailsSubmitted: stripeAccount.details_submitted ?? false,
+        };
+      } catch {
+        // Si Stripe falla aquí, seguimos con el valor de BD (fallback seguro).
+      }
+    }
+
     // ── Modo test/fallback: cuenta sin Stripe real o sin capabilities ────────────
     // Incluye: placeholder local_, cuenta no conectada o cuenta sin chargesEnabled
     if (
