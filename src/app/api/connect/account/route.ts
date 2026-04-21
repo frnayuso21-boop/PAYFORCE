@@ -135,9 +135,10 @@ export async function POST(req: NextRequest) {
         // White-label: controller properties (Stripe Connect moderno)
         // NO se usa type: "express" — el merchant nunca ve el Express Dashboard
         controller: {
-          stripe_dashboard: { type: "none" },   // sin dashboard hosteado por Stripe
-          fees:             { payer: "application" },
-          losses:           { payments: "application" },
+          stripe_dashboard:       { type: "none" },
+          fees:                   { payer: "application" },
+          losses:                 { payments: "stripe" },
+          requirement_collection: "stripe",
         },
         email,
         country,
