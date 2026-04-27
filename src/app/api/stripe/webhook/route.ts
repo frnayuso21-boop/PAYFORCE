@@ -74,7 +74,7 @@ async function processEvent(event: Stripe.Event) {
   try {
     switch (event.type) {
       case "payment_intent.succeeded":
-        await handlePaymentSucceeded(event.data.object as Stripe.PaymentIntent, event.id);
+        await handlePaymentSucceeded(event.data.object as Stripe.PaymentIntent, event.id, event.account ?? null);
         break;
       case "payment_intent.payment_failed":
         await handlePaymentFailed(event.data.object as Stripe.PaymentIntent, event.id);
@@ -137,7 +137,7 @@ async function processEvent(event: Stripe.Event) {
 // HANDLERS DE EVENTOS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-async function handlePaymentSucceeded(pi: Stripe.PaymentIntent, eventId: string) {
+async function handlePaymentSucceeded(pi: Stripe.PaymentIntent, eventId: string, eventAccount: string | null) {
   log.info("payment.succeeded", { eventId, paymentIntentId: pi.id, amount: pi.amount });
 
   // Cobro masivo de suscripciones: actualizar lastChargeAt/lastChargeAmount
@@ -151,13 +151,17 @@ async function handlePaymentSucceeded(pi: Stripe.PaymentIntent, eventId: string)
     // No interrumpir — continuar con el flujo normal para registrar el pago
   }
 
-
-  // Destination Charges: el merchant se identifica por transfer_data.destination (acct_xxx).
-  // application_fee_amount es la comisión real que Stripe cobró a PayForce.
+  // event.account es la fuente más fiable para eventos de cuentas conectadas.
+  // Fallbacks: transfer_data.destination y metadata.stripeAccountId.
   const stripeAccountId =
+    eventAccount ??
     (pi.transfer_data?.destination as string | undefined) ??
     pi.metadata?.stripeAccountId ??
     null;
+
+  console.log("=== PAYMENT WEBHOOK ===");
+  console.log("event.account:", eventAccount);
+  console.log("stripeAccountId encontrado:", stripeAccountId);
 
   const platformFee = pi.application_fee_amount ?? (
     pi.metadata?.platformFee ? parseInt(pi.metadata.platformFee, 10) : 0
@@ -167,12 +171,13 @@ async function handlePaymentSucceeded(pi: Stripe.PaymentIntent, eventId: string)
   if (!stripeAccountId) {
     log.warn("payment.succeeded.no_destination", {
       eventId, paymentIntentId: pi.id,
-      reason: "transfer_data.destination ausente — posible pago de plataforma sin merchant",
+      reason: "event.account y transfer_data.destination ausentes — posible pago de plataforma sin merchant",
     });
     return;
   }
 
-  const account = await db.connectedAccount.findUnique({ where: { stripeAccountId } });
+  const account = await db.connectedAccount.findFirst({ where: { stripeAccountId } });
+  console.log("account en BD:", account?.id ?? "NO ENCONTRADO");
   if (!account) {
     log.warn("payment.succeeded.account_not_found", { eventId, stripeAccountId });
     return;
