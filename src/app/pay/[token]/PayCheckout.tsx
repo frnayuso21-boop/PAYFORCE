@@ -135,7 +135,7 @@ function CheckoutForm({
               paypal:    "never",
               amazonPay: "never",
             },
-            layout: { maxColumns: 1, maxRows: 2, overflow: "never" },
+            layout: { maxColumns: 1, maxRows: 2, overflow: "auto" },
           }}
         />
       </div>

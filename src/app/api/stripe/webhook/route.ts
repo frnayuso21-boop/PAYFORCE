@@ -95,6 +95,9 @@ async function processEvent(event: Stripe.Event) {
       case "account.application.deauthorized":
         await handleAccountDeauthorized(event.data.object as Stripe.Application, event.id, event.account ?? null);
         break;
+      case "setup_intent.succeeded":
+        await handleSetupIntentSucceeded(event.data.object as Stripe.SetupIntent, event.id);
+        break;
       default:
         log.info("webhook.unhandled", { eventId: event.id, type: event.type });
     }
@@ -128,6 +131,18 @@ async function processEvent(event: Stripe.Event) {
 
 async function handlePaymentSucceeded(pi: Stripe.PaymentIntent, eventId: string) {
   log.info("payment.succeeded", { eventId, paymentIntentId: pi.id, amount: pi.amount });
+
+  // Cobro masivo de suscripciones: actualizar lastChargeAt/lastChargeAmount
+  if (pi.metadata?.batchMonth) {
+    if (pi.customer) {
+      await db.subscriptionCustomer.updateMany({
+        where: { stripeCustomerId: String(pi.customer) },
+        data:  { lastChargeAt: new Date(), lastChargeAmount: pi.amount },
+      });
+    }
+    // No interrumpir — continuar con el flujo normal para registrar el pago
+  }
+
 
   // Destination Charges: el merchant se identifica por transfer_data.destination (acct_xxx).
   // application_fee_amount es la comisión real que Stripe cobró a PayForce.
@@ -226,6 +241,56 @@ async function handlePaymentFailed(pi: Stripe.PaymentIntent, eventId: string) {
       failureCode:    pi.last_payment_error?.code    ?? null,
       failureMessage: pi.last_payment_error?.message ?? null,
     },
+  });
+
+  // Si el fallo viene de un cobro masivo → actualizar BatchResult
+  const batchJobId = pi.metadata?.batchJobId;
+  if (batchJobId) {
+    const failureReason = pi.last_payment_error?.message ?? pi.last_payment_error?.code ?? "unknown";
+    await db.batchResult.updateMany({
+      where: { paymentIntentId: pi.id },
+      data:  { status: "FAILED", failureReason },
+    });
+    // Incrementar failedCount del batch
+    await db.batchJob.update({
+      where: { id: batchJobId },
+      data:  { failedCount: { increment: 1 } },
+    }).catch(() => null);
+    log.warn("batch.payment_failed", { eventId, batchJobId, paymentIntentId: pi.id, failureReason });
+  }
+}
+
+// ── setup_intent.succeeded — guardar payment method en SubscriptionCustomer ──
+async function handleSetupIntentSucceeded(si: Stripe.SetupIntent, eventId: string) {
+  log.info("setup_intent.succeeded", { eventId, setupIntentId: si.id });
+
+  const paymentMethodId   = typeof si.payment_method === "string" ? si.payment_method : si.payment_method?.id;
+  const connectedAccountId = si.metadata?.connectedAccountId;
+  const customerId         = si.metadata?.customerId;
+  const cardInvitationId   = si.metadata?.cardInvitationId;
+
+  if (!customerId || !paymentMethodId) {
+    log.warn("setup_intent.missing_metadata", { eventId, setupIntentId: si.id });
+    return;
+  }
+
+  await db.subscriptionCustomer.update({
+    where: { id: customerId },
+    data:  {
+      stripePaymentMethodId: paymentMethodId,
+      status:                "ACTIVE",
+    },
+  });
+
+  if (cardInvitationId) {
+    await db.cardInvitation.updateMany({
+      where: { id: cardInvitationId, usedAt: null },
+      data:  { usedAt: new Date() },
+    });
+  }
+
+  log.info("subscription_customer.card_saved", {
+    eventId, customerId, paymentMethodId, connectedAccountId,
   });
 }
 

@@ -37,29 +37,41 @@ interface ConnectProviderProps {
   children:   React.ReactNode;
   accountId?: string;
   onError?:   (err: Error) => void;
+  onReady?:   () => void;  // llamado cuando client_secret se obtiene correctamente
 }
 
-export function ConnectProvider({ children, accountId, onError }: ConnectProviderProps) {
+export function ConnectProvider({ children, accountId, onError, onReady }: ConnectProviderProps) {
   const stripeConnect: StripeConnectInstance = useMemo(() => {
     const fetchClientSecret = async (): Promise<string> => {
-      const body = accountId ? JSON.stringify({ accountId }) : undefined;
-      const res  = await fetch("/api/connect/account-session", {
+      console.log("[ConnectProvider] Solicitando AccountSession…", { accountId });
+
+      const res = await fetch("/api/connect/account-session", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body,
+        body:    accountId ? JSON.stringify({ accountId }) : undefined,
       });
 
-      let json: { client_secret?: string; error?: string } = {};
-      try { json = await res.json(); } catch { /* res no tiene JSON */ }
+      const data = await res.json().catch(() => ({})) as { client_secret?: string; error?: string };
+      console.log("Account session response:", data);
 
-      if (!res.ok || !json.client_secret) {
-        const msg = json.error ?? `Error ${res.status} al obtener sesión de Stripe`;
-        console.error("[ConnectProvider] fetchClientSecret error:", msg);
+      if (data.error) {
+        console.error("Error creating account session:", data.error);
+        const err = new Error(data.error);
+        onError?.(err);
+        throw err;
+      }
+
+      if (!res.ok || !data.client_secret) {
+        const msg = `Error ${res.status} — sin client_secret en la respuesta`;
+        console.error("[ConnectProvider]", msg);
         const err = new Error(msg);
         onError?.(err);
         throw err;
       }
-      return json.client_secret;
+
+      console.log("[ConnectProvider] client_secret obtenido ✓");
+      onReady?.();
+      return data.client_secret;
     };
 
     return loadConnectAndInitialize({

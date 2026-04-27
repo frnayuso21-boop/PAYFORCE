@@ -136,6 +136,8 @@ model ConnectedAccount {
   invoiceSettings       InvoiceSettings?
   products              Product[]
   manualInvoices        ManualInvoice[]
+  subscriptionCustomers SubscriptionCustomer[]
+  batchJobs             BatchJob[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -755,4 +757,132 @@ model ManualInvoiceLine {
 
   @@index([invoiceId])
   @@map("manual_invoice_lines")
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║  SUBSCRIPTION BILLING — Cobro masivo con tarjeta guardada                   ║
+// ║  Reemplaza domiciliaciones SEPA bancarias por cobros off_session             ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+
+enum CustomerStatus {
+  PENDING_CARD
+  ACTIVE
+  FAILED
+  CANCELLED
+}
+
+enum BatchStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum BatchResultStatus {
+  SUCCESS
+  FAILED
+  NO_CARD
+  PENDING
+}
+
+// Cliente de suscripción con tarjeta guardada
+model SubscriptionCustomer {
+  id                    String         @id @default(cuid())
+  connectedAccountId    String
+  connectedAccount      ConnectedAccount @relation(fields: [connectedAccountId], references: [id])
+
+  stripeCustomerId      String         @unique
+  stripePaymentMethodId String?        // pm_xxx — rellenado por webhook setup_intent.succeeded
+
+  name              String
+  email             String
+  phone             String?
+  externalReference String?           // referencia del CRM/XML (MndtId en pain.008)
+  iban              String?           // IBAN del deudor (solo referencia, no se carga)
+  amount            Int?              // importe habitual en céntimos (del XML)
+  currency          String            @default("eur")
+
+  status            CustomerStatus    @default(PENDING_CARD)
+
+  lastChargeAt     DateTime?
+  lastChargeAmount Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  batchResults    BatchResult[]
+  cardInvitations CardInvitation[]
+
+  @@index([connectedAccountId])
+  @@index([externalReference])
+  @@index([stripeCustomerId])
+  @@map("subscription_customers")
+}
+
+// Invitación por email para que el cliente guarde su tarjeta
+model CardInvitation {
+  id         String    @id @default(cuid())
+  customerId String
+  customer   SubscriptionCustomer @relation(fields: [customerId], references: [id])
+
+  token     String    @unique @default(cuid())
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([customerId])
+  @@index([token])
+  @@map("card_invitations")
+}
+
+// Trabajo de cobro masivo (un archivo XML = un BatchJob)
+model BatchJob {
+  id                 String      @id @default(cuid())
+  connectedAccountId String
+  connectedAccount   ConnectedAccount @relation(fields: [connectedAccountId], references: [id])
+
+  filename     String
+  totalCount   Int
+  successCount Int         @default(0)
+  failedCount  Int         @default(0)
+  noCardCount  Int         @default(0)
+
+  status      BatchStatus @default(PENDING)
+  processedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  results BatchResult[]
+
+  @@index([connectedAccountId])
+  @@index([status])
+  @@map("batch_jobs")
+}
+
+// Resultado individual de cada línea del XML
+model BatchResult {
+  id         String  @id @default(cuid())
+  batchJobId String
+  batchJob   BatchJob @relation(fields: [batchJobId], references: [id])
+
+  customerId   String?
+  customer     SubscriptionCustomer? @relation(fields: [customerId], references: [id])
+
+  externalRef     String
+  customerName    String
+  amount          Int               // céntimos
+  currency        String            @default("eur")
+  endToEndId      String?           // EndToEndId del XML
+
+  status          BatchResultStatus @default(PENDING)
+  failureReason   String?
+  paymentIntentId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([batchJobId])
+  @@index([customerId])
+  @@index([status])
+  @@map("batch_results")
 }
