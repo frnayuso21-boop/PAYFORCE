@@ -96,14 +96,17 @@ function parseSepa(xml: string): RawRecord[] {
   if (!txns.length) return [];
 
   return txns
-    .map(tx => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .map((rawTx) => {
+      const tx = rawTx as any;
+
       // Nombre
       const name = extractText(tx, "Nm", "Name", "Nombre", "NombreDeudor") ||
                    extractText(tx?.Dbtr ?? tx?.Creditor ?? tx, "Nm", "Name");
 
       // Referencia: prioridad MndtId > EndToEndId > Ref > Id
       const ref  = extractText(tx, "MndtId", "EndToEndId", "Ref", "Reference", "Id", "ExternalRef") ||
-                   extractText((tx as any)?.DrctDbtTx?.MndtRltdInf ?? (tx as any)?.MndtRltdInf ?? tx, "MndtId");
+                   extractText(tx?.DrctDbtTx?.MndtRltdInf ?? tx?.MndtRltdInf ?? tx, "MndtId");
 
       // Importe
       const amtRaw = extractText(tx, "InstdAmt", "Amt", "TtlInttdAmt", "Amount", "Importe") ||
