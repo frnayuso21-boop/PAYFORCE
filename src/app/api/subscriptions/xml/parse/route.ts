@@ -103,7 +103,7 @@ function parseSepa(xml: string): RawRecord[] {
 
       // Referencia: prioridad MndtId > EndToEndId > Ref > Id
       const ref  = extractText(tx, "MndtId", "EndToEndId", "Ref", "Reference", "Id", "ExternalRef") ||
-                   extractText(tx?.DrctDbtTx?.MndtRltdInf ?? tx?.MndtRltdInf ?? tx, "MndtId");
+                   extractText((tx as any)?.DrctDbtTx?.MndtRltdInf ?? (tx as any)?.MndtRltdInf ?? tx, "MndtId");
 
       // Importe
       const amtRaw = extractText(tx, "InstdAmt", "Amt", "TtlInttdAmt", "Amount", "Importe") ||
