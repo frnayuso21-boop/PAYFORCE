@@ -20,11 +20,8 @@ export async function GET(req: NextRequest) {
 
     if (isRealStripe) {
       // ── Stripe charges on connected account ───────────────────────────────
-      const params: Record<string, unknown> = { limit };
-      if (startingAfter) params.starting_after = startingAfter;
-
       const charges = await stripe.charges.list(
-        params as Parameters<typeof stripe.charges.list>[0],
+        { limit: 100 },
         { stripeAccount: account.stripeAccountId },
       );
 
