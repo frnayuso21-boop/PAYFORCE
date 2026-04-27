@@ -14,7 +14,22 @@ export async function GET(req: NextRequest) {
     const startingAfter = searchParams.get("starting_after"); // cursor for pagination
 
     const account = await getUserPrimaryAccount(user.id);
-    console.log("[payments] userId:", user.id, "| account.id:", account?.id ?? "NO ENCONTRADO", "| stripeAccountId:", account?.stripeAccountId ?? "—");
+
+    console.log("=== PAYMENTS DEBUG ===");
+    console.log("User ID:", user.id);
+    console.log("Account found:", account?.id ?? "NO ENCONTRADO");
+    console.log("Account stripeAccountId:", account?.stripeAccountId ?? "—");
+
+    // Diagnóstico: todos los pagos en BD
+    const allPayments = await db.payment.findMany({ select: { id: true, connectedAccountId: true } });
+    console.log("ALL payments in DB:", allPayments.length);
+    allPayments.forEach((p) => console.log("  Payment:", p.id, "| connectedAccountId:", p.connectedAccountId));
+
+    if (account) {
+      const dbCheck = await db.payment.findMany({ where: { connectedAccountId: account.id }, select: { id: true } });
+      console.log("DB payments for this account:", dbCheck.length);
+    }
+
     if (!account) return NextResponse.json({ payments: [], hasMore: false });
 
     const isRealStripe = !account.stripeAccountId.startsWith("local_");
