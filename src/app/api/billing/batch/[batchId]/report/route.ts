@@ -6,7 +6,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { db }                        from "@/lib/db";
-import { createSupabaseServer }      from "@/lib/supabase/server";
+import { createSupabaseServerClient }      from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +29,7 @@ export async function GET(
   const { batchId } = await params;
   const wantCsv = req.nextUrl.searchParams.get("format") === "csv";
 
-  const supabase = await createSupabaseServer();
+  const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
