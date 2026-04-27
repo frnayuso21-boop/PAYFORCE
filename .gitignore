@@ -54,3 +54,6 @@ scripts/*.mjs
 env local
 .env
 .vercel
+env?local
+
+env\ local\ 
