@@ -9,6 +9,7 @@
  * 100 cobros: ~3-5 s en lugar de ~40 s en serie.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma }                    from "@prisma/client";
 import { stripe }                    from "@/lib/stripe";
 import { db }                        from "@/lib/db";
 import { createSupabaseServerClient }      from "@/lib/supabase/server";
@@ -82,7 +83,7 @@ export async function POST(req: NextRequest) {
   const description = `Recibo ${new Date().toLocaleDateString("es-ES", { month: "long", year: "numeric" })}`;
 
   // ── Resultados acumulados ────────────────────────────────────────────────────
-  type ResultRow = Parameters<typeof db.batchResult.create>[0]["data"];
+  type ResultRow = Prisma.BatchResultCreateManyInput;
   type UpdateRow = { id: string; amount: number };
 
   const dbResults:   ResultRow[]   = [];
@@ -185,9 +186,13 @@ export async function POST(req: NextRequest) {
   // ── Escritura en BD en paralelo ───────────────────────────────────────────────
   const now = new Date();
 
+  const validResults = dbResults.filter(
+    (r): r is typeof r & { batchJobId: string } => typeof r.batchJobId === "string"
+  );
+
   await Promise.all([
     // Todos los resultados en una sola query
-    db.batchResult.createMany({ data: dbResults }),
+    db.batchResult.createMany({ data: validResults }),
 
     // Actualizar BatchJob
     db.batchJob.update({
