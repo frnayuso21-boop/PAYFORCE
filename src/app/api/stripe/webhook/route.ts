@@ -23,6 +23,12 @@ export async function POST(req: NextRequest) {
   const rawBody   = await req.text();
   const signature = req.headers.get("stripe-signature");
 
+  console.log("=== WEBHOOK DEBUG ===");
+  console.log("Body length:", rawBody.length);
+  console.log("Signature:", signature?.substring(0, 20));
+  console.log("Secret exists:", !!process.env.STRIPE_WEBHOOK_SECRET);
+  console.log("Secret prefix:", process.env.STRIPE_WEBHOOK_SECRET?.substring(0, 10));
+
   if (!signature) {
     log.warn("webhook.rejected", { reason: "missing_signature" });
     return NextResponse.json({ error: "Missing stripe-signature" }, { status: 400 });
@@ -34,6 +40,8 @@ export async function POST(req: NextRequest) {
     event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret!);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Invalid signature";
+    console.error("=== WEBHOOK SIGNATURE ERROR ===", msg);
+    console.error("Body preview:", rawBody.substring(0, 100));
     log.warn("webhook.rejected", { reason: "invalid_signature", detail: msg });
     return NextResponse.json({ error: msg }, { status: 400 });
   }
