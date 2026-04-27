@@ -23,18 +23,6 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: "asc" },
     });
 
-    const connect = connectedAccount ? {
-      stripeAccountId:  connectedAccount.stripeAccountId,
-      businessName:     connectedAccount.businessName,
-      email:            connectedAccount.email,
-      country:          connectedAccount.country,
-      defaultCurrency:  connectedAccount.defaultCurrency,
-      chargesEnabled:   connectedAccount.chargesEnabled,
-      payoutsEnabled:   connectedAccount.payoutsEnabled,
-      detailsSubmitted: connectedAccount.detailsSubmitted,
-      status:           connectedAccount.status,
-    } : null;
-
     // Sin cuenta real → devolver datos vacíos con estado NOT_CONNECTED
     const hasRealAccount =
       connectedAccount?.stripeAccountId &&
@@ -46,9 +34,63 @@ export async function GET(req: NextRequest) {
         recentPayments: [],
         payouts:        [],
         disputes:       [],
-        connect,
+        connect: connectedAccount ? {
+          stripeAccountId:  connectedAccount.stripeAccountId,
+          businessName:     connectedAccount.businessName,
+          email:            connectedAccount.email,
+          country:          connectedAccount.country,
+          defaultCurrency:  connectedAccount.defaultCurrency,
+          chargesEnabled:   connectedAccount.chargesEnabled,
+          payoutsEnabled:   connectedAccount.payoutsEnabled,
+          detailsSubmitted: connectedAccount.detailsSubmitted,
+          status:           connectedAccount.status,
+        } : null,
       });
     }
+
+    // Sincronizar estado real desde Stripe antes de devolver los datos
+    let chargesEnabled   = connectedAccount.chargesEnabled;
+    let payoutsEnabled   = connectedAccount.payoutsEnabled;
+    let detailsSubmitted = connectedAccount.detailsSubmitted;
+    let connectStatus    = connectedAccount.status;
+
+    try {
+      const stripeAcc = await stripe.accounts.retrieve(connectedAccount.stripeAccountId);
+      chargesEnabled   = stripeAcc.charges_enabled   ?? false;
+      payoutsEnabled   = stripeAcc.payouts_enabled   ?? false;
+      detailsSubmitted = stripeAcc.details_submitted ?? false;
+
+      // Derivar estado
+      if (chargesEnabled && payoutsEnabled) connectStatus = "ENABLED";
+      else if (detailsSubmitted)            connectStatus = "PENDING";
+
+      // Actualizar BD si algo cambió
+      if (
+        connectedAccount.chargesEnabled   !== chargesEnabled ||
+        connectedAccount.payoutsEnabled   !== payoutsEnabled ||
+        connectedAccount.detailsSubmitted !== detailsSubmitted ||
+        connectedAccount.status           !== connectStatus
+      ) {
+        await db.connectedAccount.update({
+          where: { id: connectedAccount.id },
+          data:  { chargesEnabled, payoutsEnabled, detailsSubmitted, status: connectStatus },
+        });
+      }
+    } catch {
+      // Si Stripe no responde, se usan los datos de BD (sin bloquear el dashboard)
+    }
+
+    const connect = {
+      stripeAccountId:  connectedAccount.stripeAccountId,
+      businessName:     connectedAccount.businessName,
+      email:            connectedAccount.email,
+      country:          connectedAccount.country,
+      defaultCurrency:  connectedAccount.defaultCurrency,
+      chargesEnabled,
+      payoutsEnabled,
+      detailsSubmitted,
+      status: connectStatus,
+    };
 
     const currency     = connectedAccount.defaultCurrency ?? "eur";
     const stripeOpts   = { stripeAccount: connectedAccount.stripeAccountId };
