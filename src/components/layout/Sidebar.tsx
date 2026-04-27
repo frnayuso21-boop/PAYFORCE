@@ -13,9 +13,27 @@ import {
 } from "lucide-react";
 import { cn }       from "@/lib/utils";
 import { useBrand } from "@/context/BrandContext";
+import Image        from "next/image";
 
-// ── BrandAvatar — siempre hexágono PayForce ──────────────────────────────────
-function BrandAvatar({ size = 30 }: { size?: number }) {
+// ── BrandAvatar — logo propio si existe, si no hexágono PayForce ─────────────
+function BrandAvatar({ size = 30, logoUrl }: { size?: number; logoUrl?: string | null }) {
+  if (logoUrl) {
+    return (
+      <div
+        style={{ width: size, height: size }}
+        className="shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-white flex items-center justify-center"
+      >
+        <Image
+          src={logoUrl}
+          alt="Logo"
+          width={size}
+          height={size}
+          className="h-full w-full object-contain"
+          unoptimized
+        />
+      </div>
+    );
+  }
   return (
     <div style={{ width: size, height: size }}
       className="shrink-0 flex items-center justify-center">
@@ -187,6 +205,19 @@ export function Sidebar() {
   const [open, setOpen]           = useState(false);
   const [expanded, setExpanded]   = useState<Record<string, boolean>>({});
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [businessName, setBusinessName] = useState<string>("");
+  const [userEmail,    setUserEmail]    = useState<string>("");
+
+  useEffect(() => {
+    fetch("/api/dashboard")
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => {
+        if (!d) return;
+        setBusinessName(d.connect?.businessName ?? "");
+        setUserEmail(d.connect?.email ?? "");
+      })
+      .catch(() => {});
+  }, []);
 
   async function handleLogout() {
     setOpen(false);
@@ -232,7 +263,7 @@ export function Sidebar() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const { theme } = useBrand();
+  const { theme, logoUrl } = useBrand();
 
   return (
     <aside
@@ -247,10 +278,14 @@ export function Sidebar() {
           onClick={() => setOpen((v) => !v)}
           className="flex w-full items-center gap-2 rounded-xl px-2.5 py-1.5 transition-colors hover:bg-black/5"
         >
-          <BrandAvatar size={30} />
+          <BrandAvatar size={30} logoUrl={logoUrl} />
           <div className="min-w-0 flex-1 text-left">
-            <p className="truncate text-[11px] font-semibold leading-tight" style={{ color: theme.sidebarActiveText }}>Mi cuenta</p>
-            <p className="truncate text-[10px] leading-tight" style={{ color: theme.sidebarMuted }}>PayForce</p>
+            <p className="truncate text-[11px] font-semibold leading-tight" style={{ color: theme.sidebarActiveText }}>
+              {businessName || "Mi cuenta"}
+            </p>
+            <p className="truncate text-[10px] leading-tight" style={{ color: theme.sidebarMuted }}>
+              {userEmail || "PayForce"}
+            </p>
           </div>
           <ChevronDown className={cn("h-3 w-3 shrink-0 transition-transform duration-150", open && "rotate-180")}
             style={{ color: theme.sidebarMuted }} />
