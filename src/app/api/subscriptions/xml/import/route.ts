@@ -8,6 +8,7 @@
  * 100 clientes nuevos: ~4-6 s en lugar de ~25 s en serie.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma }                    from "@prisma/client";
 import { stripe }                    from "@/lib/stripe";
 import { db }                        from "@/lib/db";
 import { createSupabaseServerClient }      from "@/lib/supabase/server";
@@ -60,7 +61,7 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Crear en Stripe en chunks paralelos ──────────────────────────────────────
-  type DbRow = Parameters<typeof db.subscriptionCustomer.createMany>[0]["data"][number];
+  type DbRow = Prisma.SubscriptionCustomerCreateManyInput;
   const dbRows:  DbRow[]  = [];
   let   errors            = 0;
 
