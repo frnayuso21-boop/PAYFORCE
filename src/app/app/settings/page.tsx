@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { Upload, Trash2, Check, Palette, Landmark, ArrowRight } from "lucide-react";
+import { useRef, useState, useEffect } from "react";
+import { Upload, Trash2, Check, Palette, Landmark, ArrowRight, FileText, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useBrand }       from "@/context/BrandContext";
 import { THEMES, THEME_IDS } from "@/lib/themes";
@@ -70,6 +70,10 @@ function ThemeCard({
 
 // ─── Página principal ──────────────────────────────────────────────────────────
 
+function clean(raw: string): string {
+  return raw.toUpperCase().replace(/[^A-Z0-9 ]/g, "").substring(0, 22);
+}
+
 export default function SettingsPage() {
   const {
     logoUrl, brandName, primaryColor, themeId,
@@ -78,6 +82,55 @@ export default function SettingsPage() {
 
   const fileInputRef  = useRef<HTMLInputElement>(null);
   const [saved, setSaved] = useState(false);
+
+  // ── Extracto bancario ──────────────────────────────────────────────────────
+  const [descriptor,     setDescriptor]     = useState("");
+  const [savedDescriptor,setSavedDescriptor]= useState("");
+  const [descLoading,    setDescLoading]    = useState(true);
+  const [descSaving,     setDescSaving]     = useState(false);
+  const [descMsg,        setDescMsg]        = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/dashboard/settings/statement-descriptor")
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => {
+        if (d?.statementDescriptor) {
+          setDescriptor(d.statementDescriptor);
+          setSavedDescriptor(d.statementDescriptor);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setDescLoading(false));
+  }, []);
+
+  function handleDescriptorChange(val: string) {
+    setDescriptor(clean(val));
+    setDescMsg(null);
+  }
+
+  async function saveDescriptor() {
+    setDescSaving(true);
+    setDescMsg(null);
+    try {
+      const r = await fetch("/api/dashboard/settings/statement-descriptor", {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ statementDescriptor: descriptor }),
+      });
+      const d = await r.json();
+      if (r.ok) {
+        setSavedDescriptor(d.statementDescriptor);
+        setDescriptor(d.statementDescriptor);
+        setDescMsg({ ok: true, text: "Extracto guardado correctamente." });
+      } else {
+        setDescMsg({ ok: false, text: d.error ?? "Error al guardar." });
+      }
+    } catch {
+      setDescMsg({ ok: false, text: "Error de red." });
+    } finally {
+      setDescSaving(false);
+    }
+  }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -222,6 +275,76 @@ export default function SettingsPage() {
           {saved ? <><Check className="h-4 w-4" /> Guardado</> : "Guardar cambios"}
         </button>
       </div>
+
+      {/* ── Extracto bancario ── */}
+      <section className="rounded-2xl border border-slate-100 bg-white p-6 space-y-5">
+        <div className="flex items-center gap-2">
+          <FileText className="h-4 w-4 text-slate-400" />
+          <h2 className="text-[13px] font-bold uppercase tracking-widest text-slate-400">
+            Extracto bancario
+          </h2>
+        </div>
+        <p className="text-[12px] text-slate-400 -mt-2">
+          Texto que aparece en el banco de tu cliente cuando le cobras. Máximo 22 caracteres, solo letras y números.
+        </p>
+
+        {descLoading ? (
+          <div className="h-10 w-full animate-pulse rounded-xl bg-slate-100" />
+        ) : (
+          <div className="space-y-3">
+            <div className="relative">
+              <input
+                type="text"
+                value={descriptor}
+                onChange={(e) => handleDescriptorChange(e.target.value)}
+                placeholder="MI EMPRESA"
+                maxLength={22}
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 pr-16 text-[13px] font-mono uppercase text-slate-800 outline-none focus:border-slate-400 focus:bg-white transition"
+              />
+              <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-semibold tabular-nums ${descriptor.length >= 22 ? "text-red-400" : "text-slate-400"}`}>
+                {descriptor.length}/22
+              </span>
+            </div>
+
+            {/* Vista previa */}
+            <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-1.5">
+                Vista previa en extracto
+              </p>
+              <p className="font-mono text-[13px] text-slate-700">
+                {descriptor || "MI EMPRESA"}* PAYFORCE
+              </p>
+            </div>
+
+            {/* Feedback */}
+            {descMsg && (
+              <div className={`flex items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-medium ${
+                descMsg.ok
+                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                  : "bg-red-50 text-red-700 border border-red-200"
+              }`}>
+                {descMsg.ok
+                  ? <Check className="h-3.5 w-3.5 shrink-0" />
+                  : <FileText className="h-3.5 w-3.5 shrink-0" />}
+                {descMsg.text}
+              </div>
+            )}
+
+            <div className="flex justify-end">
+              <button
+                onClick={saveDescriptor}
+                disabled={descSaving || descriptor === savedDescriptor || descriptor.length < 5}
+                className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-[13px] font-semibold text-white transition disabled:opacity-40"
+                style={{ background: theme.accentBg }}
+              >
+                {descSaving
+                  ? <><Loader2 className="h-4 w-4 animate-spin" /> Guardando…</>
+                  : <><Check className="h-4 w-4" /> Guardar cambios</>}
+              </button>
+            </div>
+          </div>
+        )}
+      </section>
 
       {/* ── Cuenta bancaria ── */}
       <section className="space-y-4 rounded-2xl border border-slate-100 bg-white p-6 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">

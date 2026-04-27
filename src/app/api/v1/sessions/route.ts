@@ -135,11 +135,19 @@ export async function POST(req: NextRequest) {
   const token     = randomBytes(16).toString("hex");
   const expiresAt = new Date(Date.now() + expiresIn * 1000);
 
+  const rawDescriptor = (account.statementDescriptor || account.businessName || "PAYFORCE");
+  const statementDescriptorSuffix = rawDescriptor
+    .substring(0, 22)
+    .toUpperCase()
+    .replace(/[^A-Z0-9 ]/g, "")
+    .trim();
+
   const pi = await stripe.paymentIntents.create({
     amount,
     currency,
     description,
     automatic_payment_methods: { enabled: true },
+    ...(statementDescriptorSuffix ? { statement_descriptor_suffix: statementDescriptorSuffix } : {}),
     metadata: {
       paymentLinkToken:    token,
       connectedAccountId:  account.id,

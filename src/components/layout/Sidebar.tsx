@@ -9,7 +9,7 @@ import {
   ChevronDown, ChevronRight, LogOut, Settings, User, ShieldCheck,
   Package, Cpu, QrCode, Barcode, Phone, Smartphone,
   BarChart2, Receipt, FileText, Scale, Database,
-  CreditCard, Layers, Code2, Zap,
+  CreditCard, Layers, Code2, Zap, UserCog,
 } from "lucide-react";
 import { cn }       from "@/lib/utils";
 import { useBrand } from "@/context/BrandContext";
@@ -44,6 +44,7 @@ const NAV_SECTIONS: NavSection[] = [
       { label: "Transacciones",       href: "/app/transactions", icon: Layers          },
       { label: "Clientes",            href: "/app/customers",    icon: Users           },
       { label: "Catálogo Productos",  href: "/app/products",     icon: Package         },
+      { label: "Gestores",            href: "/app/managers",     icon: UserCog         },
     ],
   },
   {

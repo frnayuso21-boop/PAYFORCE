@@ -121,8 +121,10 @@ model ConnectedAccount {
   slug             String? @unique   // "mi-negocio" → mi-negocio.payforce.io
   storeDescription String?           // Descripción pública de la tienda
   primaryColor     String?           // Color principal hex, p.ej. "#6366f1"
-  storeEnabled     Boolean @default(false)
+  storeEnabled         Boolean @default(false)
+  statementDescriptor  String? @default("")
 
+  managers              Manager[]
   payments              Payment[]
   payouts               Payout[]
   disputes              Dispute[]
@@ -390,6 +392,30 @@ model PaymentLink {
 
 // ╔══════════════════════════════════════════════════════════════════════════════╗
 // ║  API KEY                                                                     ║
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║  Gestores — destinatarios de informes automáticos                           ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+
+model Manager {
+  id                 String    @id @default(cuid())
+  connectedAccountId String
+  name               String
+  email              String
+  role               String    @default("viewer")
+  reportFrequency    String    @default("weekly")
+  reportFormat       String    @default("csv")
+  reportDay          Int       @default(1)
+  active             Boolean   @default(true)
+  lastReportSentAt   DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  account ConnectedAccount @relation(fields: [connectedAccountId], references: [id])
+
+  @@map("managers")
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════════╗
 // ║  Claves para integraciones externas (ecommerce, SaaS, marketplaces)         ║
 // ╚══════════════════════════════════════════════════════════════════════════════╝
 
