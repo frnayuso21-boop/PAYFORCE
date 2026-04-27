@@ -23,7 +23,8 @@ export async function GET(req: NextRequest) {
       _sum:   { amountToPayMerchant: true },
     });
     const availableCents = agg._sum.amountToPayMerchant ?? 0;
-    const feeCents       = Math.ceil(availableCents * INSTANT_FEE_RATE);
+    let feeCents         = Math.ceil(availableCents * INSTANT_FEE_RATE);
+    if (feeCents < 50) feeCents = 50;
     const netCents       = availableCents - feeCents;
 
     // IBAN guardado en stripeMetadata
@@ -92,7 +93,8 @@ export async function POST(req: NextRequest) {
     if (requestedAmount < 100)
       return NextResponse.json({ error: "Importe mínimo 1,00 €" }, { status: 400 });
 
-    const feeCents  = Math.ceil(requestedAmount * INSTANT_FEE_RATE);
+    let feeCents    = Math.ceil(requestedAmount * INSTANT_FEE_RATE);
+    if (feeCents < 50) feeCents = 50;
     const netCents  = requestedAmount - feeCents;
 
     // Leer IBAN del merchant

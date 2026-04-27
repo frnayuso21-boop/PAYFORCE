@@ -4,6 +4,7 @@ import Link from "next/link";
 import {
   CreditCard, RefreshCw, Search, ArrowUpRight,
   CheckCircle2, XCircle, Clock, RotateCcw, ChevronRight,
+  X, AlertTriangle, Loader2,
 } from "lucide-react";
 
 // ── Tipos ──────────────────────────────────────────────────────────────────────
@@ -83,6 +84,106 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+// ── Mini modal de reembolso rápido ──────────────────────────────────────────
+const REFUND_REASONS = [
+  { value: "requested_by_customer", label: "Solicitado por el cliente" },
+  { value: "duplicate",             label: "Duplicado"                 },
+  { value: "fraudulent",            label: "Fraude"                    },
+];
+
+function QuickRefundModal({
+  payment,
+  onClose,
+  onSuccess,
+}: {
+  payment: Payment;
+  onClose: () => void;
+  onSuccess: (id: string) => void;
+}) {
+  const [reason,   setReason]   = useState("requested_by_customer");
+  const [loading,  setLoading]  = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+
+  async function handleConfirm() {
+    setErrorMsg("");
+    setLoading(true);
+    try {
+      const r = await fetch(`/api/dashboard/payments/${payment.id}/refund`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason }),
+      });
+      const d = await r.json();
+      if (!r.ok) { setErrorMsg(d.error ?? "Error al reembolsar."); return; }
+      onSuccess(payment.id);
+      onClose();
+    } catch {
+      setErrorMsg("Error de red. Inténtalo de nuevo.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white shadow-xl overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <h2 className="text-[14px] font-semibold text-slate-900">Reembolsar pago</h2>
+          <button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 transition-colors">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="px-5 py-4 space-y-4">
+          <div className="rounded-xl bg-slate-50 px-4 py-3">
+            <p className="text-[12px] text-slate-500">{payment.description ?? payment.id}</p>
+            <p className="text-[14px] font-semibold text-slate-800">
+              {fmt(payment.amount, payment.currency)}
+              {payment.customerEmail && <span className="ml-1.5 font-normal text-slate-400">· {payment.customerEmail}</span>}
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            <p className="text-[12px] font-medium text-slate-600">Motivo</p>
+            <select
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-[13px] text-slate-800 outline-none focus:border-slate-400 focus:bg-white transition"
+            >
+              {REFUND_REASONS.map((r) => (
+                <option key={r.value} value={r.value}>{r.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-start gap-2 rounded-xl bg-amber-50 border border-amber-100 px-3.5 py-2.5">
+            <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
+            <p className="text-[12px] text-amber-700">
+              Las comisiones de procesamiento no son reembolsables. PayForce retiene su comisión.
+              Solo se devolverá el importe neto al cliente.
+            </p>
+          </div>
+          {errorMsg && (
+            <div className="flex items-center gap-2 rounded-xl bg-red-50 border border-red-100 px-3.5 py-2.5">
+              <XCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
+              <p className="text-[12px] text-red-700">{errorMsg}</p>
+            </div>
+          )}
+        </div>
+        <div className="flex justify-end gap-2 px-5 pb-5">
+          <button onClick={onClose} disabled={loading}
+            className="rounded-xl border border-slate-200 px-4 py-2 text-[13px] font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50">
+            Cancelar
+          </button>
+          <button onClick={handleConfirm} disabled={loading}
+            className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-[13px] font-medium text-white disabled:opacity-60 transition-colors"
+            style={{ background: "#991B1B" }}>
+            {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            Confirmar reembolso
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const FILTERS: { key: FilterKey; label: string }[] = [
   { key: "all",       label: "Todos"        },
   { key: "succeeded", label: "Exitosos"     },
@@ -92,10 +193,11 @@ const FILTERS: { key: FilterKey; label: string }[] = [
 
 // ── Página ─────────────────────────────────────────────────────────────────────
 export default function PaymentsPage() {
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [loading,  setLoading]  = useState(true);
-  const [filter,   setFilter]   = useState<FilterKey>("all");
-  const [search,   setSearch]   = useState("");
+  const [payments,      setPayments]      = useState<Payment[]>([]);
+  const [loading,       setLoading]       = useState(true);
+  const [filter,        setFilter]        = useState<FilterKey>("all");
+  const [search,        setSearch]        = useState("");
+  const [refundTarget,  setRefundTarget]  = useState<Payment | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -121,6 +223,12 @@ export default function PaymentsPage() {
   });
 
   const totalAmount = visible.reduce((s, p) => s + p.amount, 0);
+
+  function handleRefundSuccess(id: string) {
+    setPayments((prev) =>
+      prev.map((p) => p.id === id ? { ...p, status: "refunded", refunded: true } : p)
+    );
+  }
 
   return (
     <div className="min-h-screen bg-white p-8">
@@ -184,7 +292,7 @@ export default function PaymentsPage() {
       <div className="rounded-lg border overflow-hidden" style={{ borderColor: "#E5E7EB" }}>
         {/* Cabecera */}
         <div className="grid bg-slate-50 border-b text-[11px] font-semibold text-slate-400 uppercase tracking-wide px-5 py-3"
-          style={{ borderColor: "#E5E7EB", gridTemplateColumns: "1.6fr 1fr 2fr 1.5fr 1.2fr 1fr 1fr 24px" }}>
+          style={{ borderColor: "#E5E7EB", gridTemplateColumns: "1.6fr 1fr 2fr 1.5fr 1.2fr 1fr 1fr 100px 24px" }}>
           <span>Importe</span>
           <span>Estado</span>
           <span>Descripción</span>
@@ -192,6 +300,7 @@ export default function PaymentsPage() {
           <span>Fecha</span>
           <span className="text-right">Comisión</span>
           <span className="text-right">Neto</span>
+          <span />
           <span />
         </div>
 
@@ -207,34 +316,38 @@ export default function PaymentsPage() {
         ) : (
           <div className="divide-y" style={{ borderColor: "#F1F5F9" }}>
             {visible.map((p) => (
-              <Link
+              <div
                 key={p.id}
-                href={`/app/payments/${p.id}`}
-                className="grid items-center px-5 py-3.5 hover:bg-slate-50 transition group cursor-pointer"
-                style={{ gridTemplateColumns: "1.6fr 1fr 2fr 1.5fr 1.2fr 1fr 1fr 24px" }}
+                className="grid items-center px-5 py-3.5 hover:bg-slate-50 transition group"
+                style={{ gridTemplateColumns: "1.6fr 1fr 2fr 1.5fr 1.2fr 1fr 1fr 100px 24px" }}
               >
                 {/* Importe */}
-                <span
-                  className="text-[14px] font-semibold tabular-nums"
-                  style={{
-                    color: p.status === "succeeded" ? "#166534"
-                         : p.status === "failed"    ? "#991B1B"
-                         : "#475569",
-                  }}
-                >
-                  {fmt(p.amount, p.currency)}
-                </span>
+                <Link href={`/app/payments/${p.id}`} className="contents">
+                  <span
+                    className="text-[14px] font-semibold tabular-nums"
+                    style={{
+                      color: p.status === "succeeded" ? "#166534"
+                           : p.status === "failed"    ? "#991B1B"
+                           : "#475569",
+                    }}
+                  >
+                    {fmt(p.amount, p.currency)}
+                  </span>
+                </Link>
 
                 {/* Estado */}
-                <StatusBadge status={p.status} />
+                <Link href={`/app/payments/${p.id}`} className="contents">
+                  <StatusBadge status={p.status} />
+                </Link>
 
                 {/* Descripción */}
-                <span className="text-[12px] text-slate-500 truncate pr-4">
+                <Link href={`/app/payments/${p.id}`}
+                  className="text-[12px] text-slate-500 truncate pr-4">
                   {p.description ?? "—"}
-                </span>
+                </Link>
 
                 {/* Cliente */}
-                <div className="min-w-0">
+                <Link href={`/app/payments/${p.id}`} className="min-w-0 block">
                   {p.customerName && (
                     <p className="text-[12px] font-medium text-slate-700 truncate">{p.customerName}</p>
                   )}
@@ -244,31 +357,66 @@ export default function PaymentsPage() {
                   {!p.customerName && !p.customerEmail && (
                     <span className="text-[12px] text-slate-300">—</span>
                   )}
-                </div>
+                </Link>
 
                 {/* Fecha */}
-                <div>
+                <Link href={`/app/payments/${p.id}`} className="block">
                   <p className="text-[12px] text-slate-600">{fmtDate(p.created)}</p>
                   <p className="text-[11px] text-slate-400">{fmtTime(p.created)}</p>
-                </div>
+                </Link>
 
                 {/* Comisión */}
-                <span className="text-[12px] text-slate-400 text-right tabular-nums">
+                <Link href={`/app/payments/${p.id}`}
+                  className="text-[12px] text-slate-400 text-right tabular-nums block">
                   {p.fee > 0 ? `−${fmt(p.fee, p.currency)}` : "—"}
-                </span>
+                </Link>
 
                 {/* Neto */}
-                <span className="text-[12px] font-medium text-slate-700 text-right tabular-nums">
+                <Link href={`/app/payments/${p.id}`}
+                  className="text-[12px] font-medium text-slate-700 text-right tabular-nums block">
                   {fmt(p.net, p.currency)}
-                </span>
+                </Link>
+
+                {/* Botón reembolsar */}
+                <div className="flex justify-center">
+                  {p.status === "succeeded" && !p.refunded ? (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setRefundTarget(p); }}
+                      style={{
+                        fontSize: "11px",
+                        fontWeight: 500,
+                        color: "#991B1B",
+                        background: "#FEE2E2",
+                        border: "0.5px solid #FECACA",
+                        padding: "4px 10px",
+                        borderRadius: "5px",
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      Reembolsar
+                    </button>
+                  ) : null}
+                </div>
 
                 {/* Flecha */}
-                <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-slate-500 transition justify-self-end" />
-              </Link>
+                <Link href={`/app/payments/${p.id}`} className="contents">
+                  <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-slate-500 transition justify-self-end" />
+                </Link>
+              </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* Modal reembolso rápido */}
+      {refundTarget && (
+        <QuickRefundModal
+          payment={refundTarget}
+          onClose={() => setRefundTarget(null)}
+          onSuccess={handleRefundSuccess}
+        />
+      )}
     </div>
   );
 }

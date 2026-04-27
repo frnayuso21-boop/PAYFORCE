@@ -4,7 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft, CheckCircle2, XCircle, Clock, RotateCcw,
   CreditCard, User, Code2, AlertTriangle, RefreshCw,
-  ExternalLink, ReceiptText,
+  ExternalLink, ReceiptText, X, Loader2,
 } from "lucide-react";
 
 // ── Tipos ─────────────────────────────────────────────────────────────────────
@@ -98,17 +98,184 @@ function Row({ label, value, mono = false }: { label: string; value: React.React
   );
 }
 
+// ── Modal de reembolso ────────────────────────────────────────────────────────
+const REFUND_REASONS = [
+  { value: "requested_by_customer", label: "Solicitado por el cliente" },
+  { value: "duplicate",             label: "Duplicado"                 },
+  { value: "fraudulent",            label: "Fraude"                    },
+];
+
+function RefundModal({
+  charge,
+  chargeId,
+  onClose,
+  onSuccess,
+}: {
+  charge: ChargeDetail;
+  chargeId: string;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [type,      setType]      = useState<"full" | "partial">("full");
+  const [amount,    setAmount]    = useState("");
+  const [reason,    setReason]    = useState("requested_by_customer");
+  const [loading,   setLoading]   = useState(false);
+  const [errorMsg,  setErrorMsg]  = useState("");
+
+  const maxAmount = (charge.amount - charge.amountRefunded) / 100;
+
+  async function handleConfirm() {
+    setErrorMsg("");
+    setLoading(true);
+    try {
+      const body: Record<string, unknown> = { reason };
+      if (type === "partial") {
+        const cents = Math.round(parseFloat(amount.replace(",", ".")) * 100);
+        if (isNaN(cents) || cents <= 0) {
+          setErrorMsg("Introduce un importe válido.");
+          setLoading(false);
+          return;
+        }
+        body.amount = cents;
+      }
+      const r = await fetch(`/api/dashboard/payments/${chargeId}/refund`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const d = await r.json();
+      if (!r.ok) { setErrorMsg(d.error ?? "Error al reembolsar."); return; }
+      onSuccess();
+      onClose();
+    } catch {
+      setErrorMsg("Error de red. Inténtalo de nuevo.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-xl overflow-hidden">
+
+        {/* Cabecera */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <h2 className="text-[15px] font-semibold text-slate-900">Reembolsar pago</h2>
+          <button onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 transition-colors">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="px-5 py-4 space-y-4">
+          {/* Info del pago */}
+          <div className="rounded-xl bg-slate-50 px-4 py-3 space-y-0.5">
+            <p className="text-[12px] text-slate-500">
+              {charge.description ?? charge.id}
+            </p>
+            <p className="text-[13px] font-semibold text-slate-800">
+              {(charge.amount / 100).toLocaleString("es-ES", { style: "currency", currency: charge.currency.toUpperCase() })}
+              {" · "}{charge.billingDetails.email ?? "—"}
+            </p>
+          </div>
+
+          {/* Tipo de reembolso */}
+          <div className="space-y-2">
+            <p className="text-[12px] font-medium text-slate-600">Tipo de reembolso</p>
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input type="radio" name="refund-type" checked={type === "full"} onChange={() => setType("full")}
+                className="accent-slate-800" />
+              <span className="text-[13px] text-slate-700">
+                Reembolso total
+                <span className="ml-1.5 text-slate-400">
+                  ({maxAmount.toLocaleString("es-ES", { minimumFractionDigits: 2 })}€)
+                </span>
+              </span>
+            </label>
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input type="radio" name="refund-type" checked={type === "partial"} onChange={() => setType("partial")}
+                className="accent-slate-800" />
+              <span className="text-[13px] text-slate-700">Reembolso parcial</span>
+            </label>
+            {type === "partial" && (
+              <div className="ml-6 flex items-center gap-2">
+                <input
+                  type="text"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder={`Máx. ${maxAmount.toLocaleString("es-ES", { minimumFractionDigits: 2 })}`}
+                  className="w-36 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[13px] text-slate-800 outline-none focus:border-slate-400 focus:bg-white transition"
+                />
+                <span className="text-[13px] text-slate-500">€</span>
+              </div>
+            )}
+          </div>
+
+          {/* Motivo */}
+          <div className="space-y-1.5">
+            <p className="text-[12px] font-medium text-slate-600">Motivo</p>
+            <select
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              className="w-full appearance-none rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-[13px] text-slate-800 outline-none focus:border-slate-400 focus:bg-white transition"
+            >
+              {REFUND_REASONS.map((r) => (
+                <option key={r.value} value={r.value}>{r.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Advertencia */}
+          <div className="flex items-start gap-2 rounded-xl bg-amber-50 border border-amber-100 px-3.5 py-2.5">
+            <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
+            <p className="text-[12px] text-amber-700">
+              Las comisiones de procesamiento no son reembolsables. PayForce retiene su comisión.
+              Solo se devolverá el importe neto al cliente.
+            </p>
+          </div>
+
+          {/* Error */}
+          {errorMsg && (
+            <div className="flex items-center gap-2 rounded-xl bg-red-50 border border-red-100 px-3.5 py-2.5">
+              <XCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
+              <p className="text-[12px] text-red-700">{errorMsg}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Acciones */}
+        <div className="flex justify-end gap-2 px-5 pb-5">
+          <button
+            onClick={onClose}
+            disabled={loading}
+            className="rounded-xl border border-slate-200 px-4 py-2 text-[13px] font-medium text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={loading}
+            className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-[13px] font-medium text-white transition-colors disabled:opacity-60"
+            style={{ background: "#991B1B" }}
+          >
+            {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            Confirmar reembolso
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Componente principal ───────────────────────────────────────────────────────
 export default function ChargeDetailPage() {
   const { chargeId } = useParams<{ chargeId: string }>();
   const router       = useRouter();
 
-  const [charge,        setCharge]        = useState<ChargeDetail | null>(null);
-  const [loading,       setLoading]       = useState(true);
-  const [error,         setError]         = useState<string | null>(null);
-  const [refunding,     setRefunding]     = useState(false);
-  const [refundMsg,     setRefundMsg]     = useState<{ ok: boolean; text: string } | null>(null);
-  const [refundConfirm, setRefundConfirm] = useState(false);
+  const [charge,         setCharge]         = useState<ChargeDetail | null>(null);
+  const [loading,        setLoading]        = useState(true);
+  const [error,          setError]          = useState<string | null>(null);
+  const [showRefundModal,setShowRefundModal] = useState(false);
+  const [refundMsg,      setRefundMsg]      = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
     if (!chargeId) return;
@@ -120,26 +287,10 @@ export default function ChargeDetailPage() {
       .finally(() => setLoading(false));
   }, [chargeId]);
 
-  const handleRefund = async () => {
-    if (!charge) return;
-    setRefunding(true);
-    setRefundMsg(null);
-    try {
-      const r = await fetch(`/api/dashboard/payments/${chargeId}`, { method: "POST" });
-      const d = await r.json();
-      if (r.ok) {
-        setRefundMsg({ ok: true, text: "Reembolso procesado correctamente." });
-        setCharge((prev) => prev ? { ...prev, status: "refunded", refunded: true } : prev);
-      } else {
-        setRefundMsg({ ok: false, text: d.error ?? "Error al reembolsar" });
-      }
-    } catch {
-      setRefundMsg({ ok: false, text: "Error de red" });
-    } finally {
-      setRefunding(false);
-      setRefundConfirm(false);
-    }
-  };
+  function handleRefundSuccess() {
+    setCharge((prev) => prev ? { ...prev, status: "refunded", refunded: true } : prev);
+    setRefundMsg({ ok: true, text: "Reembolso procesado correctamente." });
+  }
 
   if (loading) return (
     <div className="flex items-center justify-center min-h-screen bg-white">
@@ -206,32 +357,24 @@ export default function ChargeDetailPage() {
                 </a>
               )}
               {charge.status === "succeeded" && !charge.refunded && (
-                refundConfirm ? (
-                  <div className="flex items-center gap-2">
-                    <span className="text-[12px] text-slate-500">¿Confirmar reembolso?</span>
-                    <button
-                      onClick={handleRefund}
-                      disabled={refunding}
-                      className="text-[12px] font-semibold text-red-600 border border-red-200 rounded-lg px-3 py-1.5 hover:bg-red-50 transition disabled:opacity-50"
-                    >
-                      {refunding ? "Procesando…" : "Sí, reembolsar"}
-                    </button>
-                    <button
-                      onClick={() => setRefundConfirm(false)}
-                      className="text-[12px] text-slate-400 hover:text-slate-600 transition"
-                    >
-                      Cancelar
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setRefundConfirm(true)}
-                    className="flex items-center gap-1.5 text-[13px] font-medium text-slate-700 border rounded-lg px-3 py-1.5 hover:bg-slate-50 transition"
-                    style={{ borderColor: "#E5E7EB" }}
-                  >
-                    <RotateCcw className="h-3.5 w-3.5" /> Reembolsar
-                  </button>
-                )
+                <button
+                  onClick={() => setShowRefundModal(true)}
+                  style={{
+                    fontSize: "13px",
+                    fontWeight: 500,
+                    color: "#991B1B",
+                    background: "#FEE2E2",
+                    border: "0.5px solid #FECACA",
+                    padding: "8px 16px",
+                    borderRadius: "8px",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
+                  <RotateCcw className="h-3.5 w-3.5" /> Reembolsar
+                </button>
               )}
             </div>
           </div>
@@ -370,6 +513,16 @@ export default function ChargeDetailPage() {
           Charge ID: {charge.id}
         </p>
       </div>
+
+      {/* Modal de reembolso */}
+      {showRefundModal && (
+        <RefundModal
+          charge={charge}
+          chargeId={chargeId}
+          onClose={() => setShowRefundModal(false)}
+          onSuccess={handleRefundSuccess}
+        />
+      )}
     </div>
   );
 }

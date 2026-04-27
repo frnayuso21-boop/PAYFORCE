@@ -19,44 +19,96 @@ export async function GET(req: NextRequest) {
     const isRealStripe = !account.stripeAccountId.startsWith("local_");
 
     if (isRealStripe) {
-      // ── Stripe charges on connected account ───────────────────────────────
-      const charges = await stripe.charges.list(
-        { limit: 100 },
-        { stripeAccount: account.stripeAccountId },
-      );
+      // ── Stripe: obtener todos los charges paginando hasta el final ────────
+      const allCharges: import("stripe").Stripe.Charge[] = [];
+      let lastId: string | undefined;
+      let hasMore = true;
 
-      const payments = charges.data
-        .filter((c) => {
-          if (!status || status === "all") return true;
-          if (status === "refunded")  return c.refunded;
-          if (status === "succeeded") return c.status === "succeeded" && !c.refunded;
-          if (status === "failed")    return c.status === "failed";
+      while (hasMore) {
+        const page = await stripe.charges.list(
+          { limit: 100, ...(lastId ? { starting_after: lastId } : {}) },
+          { stripeAccount: account.stripeAccountId },
+        );
+        allCharges.push(...page.data);
+        hasMore = page.has_more;
+        if (page.data.length > 0) lastId = page.data[page.data.length - 1].id;
+      }
+
+      // ── BD: pagos locales (pueden incluir pagos de test o sin charge en Stripe)
+      const dbPayments = await db.payment.findMany({
+        where:   { connectedAccountId: account.id },
+        orderBy: { createdAt: "desc" },
+      });
+
+      // IDs de Stripe ya presentes para evitar duplicados
+      const stripeIds = new Set(allCharges.map((c) => c.id));
+      const piIds     = new Set(allCharges.map((c) =>
+        typeof c.payment_intent === "string" ? c.payment_intent : c.payment_intent?.id,
+      ).filter(Boolean));
+
+      // Mapear charges de Stripe al formato unificado
+      const fromStripe = allCharges.map((c) => {
+        const fee = c.application_fee_amount ?? 0;
+        const net = c.amount_captured - fee;
+        return {
+          id:             c.id,
+          amount:         c.amount,
+          amountCaptured: c.amount_captured,
+          amountRefunded: c.amount_refunded,
+          currency:       c.currency,
+          status:         c.refunded ? "refunded" : c.status,
+          description:    c.description ?? null,
+          customerEmail:  c.billing_details?.email ?? null,
+          customerName:   c.billing_details?.name  ?? null,
+          created:        c.created,
+          fee,
+          net,
+          refunded:       c.refunded,
+          paymentIntentId: typeof c.payment_intent === "string"
+            ? c.payment_intent
+            : (c.payment_intent?.id ?? null),
+          source: "stripe" as const,
+        };
+      });
+
+      // Pagos en BD que NO están ya representados por un charge de Stripe
+      const fromDb = dbPayments
+        .filter((p) => {
+          if (p.stripeChargeId && stripeIds.has(p.stripeChargeId)) return false;
+          if (p.stripePaymentIntentId && piIds.has(p.stripePaymentIntentId)) return false;
           return true;
         })
-        .map((c) => {
-          const fee = c.application_fee_amount ?? 0;
-          const net = c.amount_captured - fee;
-          return {
-            id:          c.id,
-            amount:      c.amount,
-            amountCaptured: c.amount_captured,
-            amountRefunded: c.amount_refunded,
-            currency:    c.currency,
-            status:      c.refunded ? "refunded" : c.status,
-            description: c.description ?? null,
-            customerEmail: c.billing_details?.email ?? null,
-            customerName:  c.billing_details?.name  ?? null,
-            created:     c.created,
-            fee,
-            net,
-            refunded:    c.refunded,
-            paymentIntentId: typeof c.payment_intent === "string"
-              ? c.payment_intent
-              : (c.payment_intent?.id ?? null),
-          };
-        });
+        .map((p) => ({
+          id:             p.stripeChargeId ?? p.id,
+          amount:         p.amount,
+          amountCaptured: p.amount,
+          amountRefunded: p.refundedAmount ?? 0,
+          currency:       p.currency,
+          status:         (p.refundedAmount ?? 0) > 0 ? "refunded" : p.status.toLowerCase(),
+          description:    p.description ?? null,
+          customerEmail:  p.customerEmail ?? null,
+          customerName:   p.customerName  ?? null,
+          created:        Math.floor(new Date(p.createdAt).getTime() / 1000),
+          fee:            p.applicationFeeAmount ?? 0,
+          net:            p.amount - (p.applicationFeeAmount ?? 0),
+          refunded:       (p.refundedAmount ?? 0) > 0,
+          paymentIntentId: p.stripePaymentIntentId ?? null,
+          source: "db" as const,
+        }));
 
-      return NextResponse.json({ payments, hasMore: charges.has_more });
+      // Unión ordenada por fecha desc
+      const merged = [...fromStripe, ...fromDb].sort((a, b) => b.created - a.created);
+
+      // Filtro de estado
+      const payments = merged.filter((p) => {
+        if (!status || status === "all") return true;
+        if (status === "refunded")  return p.refunded;
+        if (status === "succeeded") return p.status === "succeeded" && !p.refunded;
+        if (status === "failed")    return p.status === "failed";
+        return true;
+      });
+
+      return NextResponse.json({ payments, hasMore: false });
     }
 
     // ── Fallback: datos locales de BD ─────────────────────────────────────
