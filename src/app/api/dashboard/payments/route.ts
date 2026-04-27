@@ -14,6 +14,7 @@ export async function GET(req: NextRequest) {
     const startingAfter = searchParams.get("starting_after"); // cursor for pagination
 
     const account = await getUserPrimaryAccount(user.id);
+    console.log("[payments] userId:", user.id, "| account.id:", account?.id ?? "NO ENCONTRADO", "| stripeAccountId:", account?.stripeAccountId ?? "—");
     if (!account) return NextResponse.json({ payments: [], hasMore: false });
 
     const isRealStripe = !account.stripeAccountId.startsWith("local_");
@@ -39,6 +40,7 @@ export async function GET(req: NextRequest) {
         where:   { connectedAccountId: account.id },
         orderBy: { createdAt: "desc" },
       });
+      console.log("[payments] Stripe charges:", allCharges.length, "| BD payments:", dbPayments.length, "| connectedAccountId:", account.id);
 
       // IDs de Stripe ya presentes para evitar duplicados
       const stripeIds = new Set(allCharges.map((c) => c.id));
@@ -122,6 +124,7 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: "desc" },
       take:    limit,
     });
+    console.log("[payments] fallback BD | accountIds:", accountIds, "| pagos:", dbPayments.length);
 
     const payments = dbPayments.map((p) => ({
       id:          p.id,
