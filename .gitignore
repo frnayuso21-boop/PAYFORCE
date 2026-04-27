@@ -15,6 +15,16 @@ dist
 .env.development.local
 .env.test.local
 .env.production.local
+env local
+env\ local
+"env local"
+
+# Archivos duplicados / temporales
+"package-lock 2.json"
+package-lock\ 2.json
+*.jpg
+*.svg
+.cursorignore
 
 # Debug
 npm-debug.log*

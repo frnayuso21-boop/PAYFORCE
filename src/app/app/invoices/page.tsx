@@ -613,6 +613,8 @@ export default function InvoicesPage() {
     if (pRes.ok) {
       const j = await pRes.json();
       setPayments((j.payments ?? []).filter((p: InvoicePayment) => p.status === "SUCCEEDED"));
+    } else {
+      setPayments([]); // 404 u otro error — no reintentar, mostrar vacío
     }
     if (sRes.ok) {
       const j = await sRes.json();

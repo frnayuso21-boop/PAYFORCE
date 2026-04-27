@@ -13,7 +13,7 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const account = await db.connectedAccount.findUnique({ where: { userId: user.id } });
+  const account = await db.connectedAccount.findFirst({ where: { userId: user.id } });
   if (!account) return NextResponse.json({ error: "Account not found" }, { status: 404 });
 
   const jobs = await db.batchJob.findMany({

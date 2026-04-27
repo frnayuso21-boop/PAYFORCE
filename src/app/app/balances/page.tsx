@@ -18,8 +18,10 @@ export default function BalancesPage() {
 
   useEffect(() => {
     fetch("/api/dashboard/splits")
-      .then((r) => r.json())
-      .then((d) => setSplits(d.splits ?? []))
+      .then((r) => {
+        if (!r.ok) { setLoading(false); return; }
+        return r.json().then((d) => setSplits(d.splits ?? []));
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
