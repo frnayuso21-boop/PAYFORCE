@@ -8,11 +8,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <BrandProvider>
       {/* ── DESKTOP (md+): layout con sidebar lateral ──────────────────────── */}
-      <div className="hidden md:flex h-screen overflow-hidden bg-[#efefef] min-w-[1200px]">
+      <div className="hidden md:flex h-screen overflow-hidden bg-white min-w-[1200px]">
         <Sidebar />
-        <div className="flex flex-1 flex-col overflow-hidden my-3 mr-3 rounded-2xl bg-white shadow-[0_2px_16px_rgba(0,0,0,0.06)]">
+        <div className="flex flex-1 flex-col overflow-hidden border-l border-[#E5E7EB]">
           <Topbar />
-          <main className="flex-1 overflow-y-auto p-6">{children}</main>
+          <main className="flex-1 overflow-y-auto bg-[#F9FAFB]">{children}</main>
         </div>
       </div>
 
