@@ -17,6 +17,7 @@ import { ConnectStatusCard } from "@/components/dashboard/ConnectStatusCard";
 import { ActivityChart, type ChartPoint } from "@/components/dashboard/ActivityChart";
 import { SectionHeader }     from "@/components/dashboard/SectionHeader";
 import { EmptyState }        from "@/components/dashboard/EmptyState";
+import { DateRangePicker, type DateRange } from "@/components/dashboard/DateRangePicker";
 import { MobileHeader }      from "@/components/mobile/MobileHeader";
 import { MobileCard, MetricRow } from "@/components/mobile/MobileCard";
 import { PaymentItem }       from "@/components/mobile/PaymentItem";
@@ -152,15 +153,16 @@ export default function DashboardPage() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── Filtro de fecha ───────────────────────────────────────────────────────
-  const [dateRange, setDateRange] = useState<"Todo"|"12 meses"|"3 meses"|"30 días"|"Hoy">("30 días");
+  const [dateRange, setDateRange] = useState<DateRange>(() => {
+    const to   = new Date();
+    const from = new Date(to); from.setDate(from.getDate() - 30);
+    return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
+  });
   const dateRangeLabel = (() => {
-    const now = new Date();
-    const fmt = (d: Date) => d.toLocaleDateString("es-ES", { day:"numeric", month:"short", year:"numeric" });
-    if (dateRange === "Hoy") return `Hoy · ${fmt(now)}`;
-    if (dateRange === "30 días") { const s = new Date(now); s.setDate(s.getDate()-30); return `${fmt(s)} – ${fmt(now)}`; }
-    if (dateRange === "3 meses") { const s = new Date(now); s.setMonth(s.getMonth()-3); return `${fmt(s)} – ${fmt(now)}`; }
-    if (dateRange === "12 meses") { const s = new Date(now); s.setFullYear(s.getFullYear()-1); return `${fmt(s)} – ${fmt(now)}`; }
-    return `Todo el tiempo – ${fmt(now)}`;
+    const fmt = (s: string) => new Date(s).toLocaleDateString("es-ES", { day:"numeric", month:"short", year:"numeric" });
+    return dateRange.from === dateRange.to
+      ? `Hoy · ${fmt(dateRange.from)}`
+      : `${fmt(dateRange.from)} – ${fmt(dateRange.to)}`;
   })();
 
   // ── Retry modal ───────────────────────────────────────────────────────────
@@ -216,9 +218,11 @@ export default function DashboardPage() {
   const fetchOverviewAndPayments = useCallback(async (silent = false) => {
     if (!silent) setRefreshing(true);
     try {
+      const ovParams = new URLSearchParams({ from: dateRange.from, to: dateRange.to });
+      const pmParams = new URLSearchParams({ limit: "20", from: dateRange.from, to: dateRange.to });
       const [ov, pm] = await Promise.all([
-        fetch("/api/dashboard/overview").then(r => r.ok ? r.json() as Promise<OverviewData> : null).catch(() => null),
-        fetch("/api/payments?limit=20").then(r => r.ok ? r.json() as Promise<PaymentsResponse> : null).catch(() => null),
+        fetch(`/api/dashboard/overview?${ovParams}`).then(r => r.ok ? r.json() as Promise<OverviewData> : null).catch(() => null),
+        fetch(`/api/payments?${pmParams}`).then(r => r.ok ? r.json() as Promise<PaymentsResponse> : null).catch(() => null),
       ]);
       if (ov) {
         setOverview(ov);
@@ -229,7 +233,13 @@ export default function DashboardPage() {
     } finally {
       if (!silent) setRefreshing(false);
     }
-  }, []);
+  }, [dateRange]);
+
+  // ── Re-fetch cuando cambia el rango de fechas ─────────────────────────────
+  useEffect(() => {
+    void fetchOverviewAndPayments(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateRange]);
 
   // ── Fetch dashboard (payouts, disputas, connect) — solo al montar ────────
   const fetchDashboard = useCallback(async () => {
@@ -756,22 +766,7 @@ export default function DashboardPage() {
       {/* ── Filtros de fecha ─────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
         <h2 className="text-[13px] font-semibold text-slate-700">Descripción general</h2>
-        <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-          {(["Todo","12 meses","3 meses","30 días","Hoy"] as const).map(label => (
-            <button
-              key={label}
-              onClick={() => setDateRange(label)}
-              className={cn(
-                "rounded-lg px-3 py-1.5 text-[12px] font-medium transition-colors",
-                dateRange === label
-                  ? "bg-slate-900 text-white shadow-sm"
-                  : "text-slate-500 hover:text-slate-800 hover:bg-slate-50"
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        <DateRangePicker value={dateRange} onChange={setDateRange} align="right" />
       </div>
 
       {/* ── Cards grandes con gráfico integrado (estilo polar.sh) ─────────── */}

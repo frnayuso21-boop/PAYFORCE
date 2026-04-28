@@ -14,13 +14,27 @@ export async function GET(req: NextRequest) {
   try {
     const { user } = await requireAuth(req);
 
-    const now       = new Date();
-    const thisStart = startOfMonth(now);
+    const now = new Date();
+    const sp  = new URL(req.url).searchParams;
+
+    // Rango personalizado opcional — si no viene, se usa el mes actual
+    const rawFrom = sp.get("from");
+    const rawTo   = sp.get("to");
+    const customFrom = rawFrom ? startOfDay(new Date(rawFrom)) : null;
+    const customTo   = rawTo   ? (() => { const d = startOfDay(new Date(rawTo)); d.setDate(d.getDate() + 1); return d; })() : null;
+
+    const thisStart = customFrom ?? startOfMonth(now);
+    const thisEnd   = customTo   ?? undefined;        // undefined = "hasta ahora"
     const prevStart = startOfPrevMonth(now);
 
+    // Serie de puntos para el gráfico: 1 punto por día del rango (máx 90)
+    const rangeStart = customFrom ?? startOfMonth(now);
+    const rangeEnd   = customTo   ?? now;
+    const rangeMs    = rangeEnd.getTime() - rangeStart.getTime();
+    const rangeDays  = Math.min(Math.ceil(rangeMs / 86400000) + 1, 90);
     const days: { date: string; start: Date; end: Date }[] = [];
-    for (let i = 6; i >= 0; i--) {
-      const d     = new Date(now);
+    for (let i = rangeDays - 1; i >= 0; i--) {
+      const d     = new Date(rangeEnd);
       d.setDate(d.getDate() - i);
       const start = startOfDay(d);
       const end   = new Date(start);
@@ -62,9 +76,13 @@ export async function GET(req: NextRequest) {
       ? { stripeAccount: primaryAccount.stripeAccountId }
       : undefined;
 
+    const thisWhere = thisEnd
+      ? { status: "SUCCEEDED", createdAt: { gte: thisStart, lt: thisEnd }, ...accountFilter }
+      : { status: "SUCCEEDED", createdAt: { gte: thisStart }, ...accountFilter };
+
     const [thisPeriod, prevPeriod, balance, ...dailyAggs] = await Promise.all([
       db.payment.aggregate({
-        where: { status: "SUCCEEDED", createdAt: { gte: thisStart }, ...accountFilter },
+        where: thisWhere,
         _sum:   { amount: true, applicationFeeAmount: true },
         _count: { id: true },
       }),
