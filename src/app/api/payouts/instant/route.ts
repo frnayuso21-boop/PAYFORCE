@@ -5,40 +5,61 @@ import { requireAuth, AuthError }    from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-const INSTANT_FEE_RATE = 0.015; // 1,5 %
+const INSTANT_FEE_RATE = 0.015; // 1,5 % — solo si el payout se procesa como instant
 
-// ─── GET /api/payouts/instant ── Balance disponible para retirar ──────────────
+// ─── Verifica si la cuenta tiene instant payouts disponibles ─────────────────
+async function checkInstantAvailable(stripeAccountId: string): Promise<boolean> {
+  try {
+    const stripeAccount = await stripe.accounts.retrieve(stripeAccountId);
+    const balance       = await stripe.balance.retrieve({}, { stripeAccount: stripeAccountId });
+    const availableEur  = balance.available.find((b) => b.currency === "eur");
+    return (
+      stripeAccount.capabilities?.transfers === "active" &&
+      (availableEur?.amount ?? 0) > 0
+    );
+  } catch {
+    return false;
+  }
+}
+
+// ─── GET /api/payouts/instant ── Info de disponibilidad y saldo ───────────────
 export async function GET(req: NextRequest) {
   try {
     const { user } = await requireAuth(req);
 
-    const account = await db.connectedAccount.findFirst({
-      where: { userId: user.id },
-    });
-    if (!account) return NextResponse.json({ availableCents: 0, currency: "eur" });
+    const account = await db.connectedAccount.findFirst({ where: { userId: user.id } });
+    if (!account) return NextResponse.json({ availableCents: 0, currency: "eur", instantAvailable: false });
 
-    // Saldo pendiente de pago al merchant
+    const isRealStripe = !account.stripeAccountId.startsWith("local_");
+
+    // Saldo disponible en BD (merchantSplits)
     const agg = await db.merchantSplit.aggregate({
-      where:  { connectedAccountId: account.id, status: "pending" },
-      _sum:   { amountToPayMerchant: true },
+      where: { connectedAccountId: account.id, status: "pending" },
+      _sum:  { amountToPayMerchant: true },
     });
     const availableCents = agg._sum.amountToPayMerchant ?? 0;
-    let feeCents         = Math.ceil(availableCents * INSTANT_FEE_RATE);
-    if (feeCents < 50) feeCents = 50;
-    const netCents       = availableCents - feeCents;
 
-    // IBAN guardado en stripeMetadata
+    // Verificar disponibilidad de instant en Stripe
+    const instantAvailable = isRealStripe
+      ? await checkInstantAvailable(account.stripeAccountId)
+      : false;
+
+    // Fee solo aplica si es instant
+    const feeCents = instantAvailable
+      ? Math.max(Math.ceil(availableCents * INSTANT_FEE_RATE), 50)
+      : 0;
+    const netCents = availableCents - feeCents;
+
+    // IBAN del merchant
     let iban: string | undefined;
     let accountHolder: string | undefined;
     if (account.stripeMetadata) {
       try {
         const meta = JSON.parse(account.stripeMetadata) as { iban?: string; accountHolder?: string };
-        iban          = meta.iban;
-        accountHolder = meta.accountHolder;
+        iban = meta.iban; accountHolder = meta.accountHolder;
       } catch { /* ignora */ }
     }
 
-    // Solicitudes anteriores
     const history = await db.instantPayoutRequest.findMany({
       where:   { connectedAccountId: account.id },
       orderBy: { createdAt: "desc" },
@@ -48,14 +69,11 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.json({
-      availableCents,
-      feeCents,
-      netCents,
-      feeRate:      INSTANT_FEE_RATE,
-      currency:     account.defaultCurrency ?? "eur",
-      iban,
-      accountHolder,
-      history,
+      availableCents, feeCents, netCents,
+      feeRate:        INSTANT_FEE_RATE,
+      instantAvailable,
+      currency:       account.defaultCurrency ?? "eur",
+      iban, accountHolder, history,
     });
   } catch (err) {
     if (err instanceof AuthError) return NextResponse.json({ error: err.message }, { status: err.status });
@@ -63,19 +81,19 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// ─── POST /api/payouts/instant ── Solicitar pago inmediato ───────────────────
+// ─── POST /api/payouts/instant ── Solicitar payout ───────────────────────────
 export async function POST(req: NextRequest) {
   try {
     const { user } = await requireAuth(req);
+    const body     = await req.json() as { amount?: number };
 
-    const body = await req.json() as { amount?: number };
-
-    const account = await db.connectedAccount.findFirst({
-      where: { userId: user.id },
-    });
+    const account = await db.connectedAccount.findFirst({ where: { userId: user.id } });
     if (!account) return NextResponse.json({ error: "Cuenta no encontrada" }, { status: 404 });
 
-    // Calcular saldo disponible
+    const isRealStripe = !account.stripeAccountId.startsWith("local_");
+    const currency     = account.defaultCurrency ?? "eur";
+
+    // Saldo disponible
     const agg = await db.merchantSplit.aggregate({
       where: { connectedAccountId: account.id, status: "pending" },
       _sum:  { amountToPayMerchant: true },
@@ -83,9 +101,8 @@ export async function POST(req: NextRequest) {
     const availableCents = agg._sum.amountToPayMerchant ?? 0;
 
     if (availableCents < 100)
-      return NextResponse.json({ error: "Saldo insuficiente. Mínimo 1,00 € para solicitar pago inmediato." }, { status: 400 });
+      return NextResponse.json({ error: "Saldo insuficiente. Mínimo 1,00 € para solicitar payout." }, { status: 400 });
 
-    // El merchant puede solicitar un importe parcial o el total
     const requestedAmount = body.amount
       ? Math.min(body.amount, availableCents)
       : availableCents;
@@ -93,80 +110,90 @@ export async function POST(req: NextRequest) {
     if (requestedAmount < 100)
       return NextResponse.json({ error: "Importe mínimo 1,00 €" }, { status: 400 });
 
-    let feeCents    = Math.ceil(requestedAmount * INSTANT_FEE_RATE);
-    if (feeCents < 50) feeCents = 50;
-    const netCents  = requestedAmount - feeCents;
+    // Verificar disponibilidad instant antes de calcular fee
+    const instantAvailable = isRealStripe
+      ? await checkInstantAvailable(account.stripeAccountId)
+      : false;
 
-    // Leer IBAN del merchant
-    let iban: string | undefined;
-    let accountHolder: string | undefined;
-    if (account.stripeMetadata) {
-      try {
-        const meta = JSON.parse(account.stripeMetadata) as { iban?: string; accountHolder?: string };
-        iban          = meta.iban;
-        accountHolder = meta.accountHolder;
-      } catch { /* ignora */ }
-    }
+    // Fee solo si instant; si cae a standard no se cobra
+    const feeCents = instantAvailable
+      ? Math.max(Math.ceil(requestedAmount * INSTANT_FEE_RATE), 50)
+      : 0;
+    const amountAfterFee = requestedAmount - feeCents;
 
-    // Crear solicitud en BD
+    // Crear registro en BD (fee 0 si standard)
     const request = await db.instantPayoutRequest.create({
       data: {
         connectedAccountId: account.id,
         requestedAmount,
-        fee:        feeCents,
-        netAmount:  netCents,
-        currency:   account.defaultCurrency ?? "eur",
-        iban:       iban ?? null,
-        accountHolder: accountHolder ?? null,
-        status:     "PENDING",
+        fee:       feeCents,
+        netAmount: amountAfterFee,
+        currency,
+        status:    "PENDING",
       },
     });
 
-    // Intentar Stripe Instant Payout (disponible en algunos mercados)
     let stripePayoutId: string | undefined;
-    let stripeError: string | undefined;
-    try {
-      const po = await stripe.payouts.create({
-        amount:   netCents,
-        currency: account.defaultCurrency ?? "eur",
-        method:   "instant",
-        metadata: {
-          instantPayoutRequestId: request.id,
-          merchantAccountId:      account.id,
-        },
-      });
-      stripePayoutId = po.id;
+    let method: "instant" | "standard" = "standard";
+    let message: string;
+
+    if (isRealStripe) {
+      // ── Intentar instant; fallback automático a standard ───────────────────
+      try {
+        const po = await stripe.payouts.create(
+          { amount: amountAfterFee, currency, method: "instant",
+            metadata: { instantPayoutRequestId: request.id, merchantAccountId: account.id } },
+          { stripeAccount: account.stripeAccountId },
+        );
+        stripePayoutId = po.id;
+        method         = "instant";
+        message        = `Pago instantáneo de ${(amountAfterFee / 100).toFixed(2)} € en proceso. Llegará en minutos.`;
+      } catch {
+        // Fallback a standard — sin comisión extra, se devuelve el fee al merchant
+        // Actualizar registro para reflejar fee = 0 en standard
+        await db.instantPayoutRequest.update({
+          where: { id: request.id },
+          data:  { fee: 0, netAmount: requestedAmount },
+        });
+
+        const po = await stripe.payouts.create(
+          { amount: requestedAmount, currency, method: "standard",
+            metadata: { instantPayoutRequestId: request.id, merchantAccountId: account.id } },
+          { stripeAccount: account.stripeAccountId },
+        );
+        stripePayoutId = po.id;
+        method         = "standard";
+        message        = `Payout instantáneo no disponible. Se ha procesado como transferencia estándar de ${(requestedAmount / 100).toFixed(2)} € sin comisión. Llegará en 2–3 días hábiles.`;
+      }
+
       await db.instantPayoutRequest.update({
         where: { id: request.id },
-        data:  { status: "PROCESSING", stripePayoutId: po.id },
+        data:  { status: "PROCESSING", stripePayoutId },
       });
-    } catch (e) {
-      // Si Stripe instant no está disponible (común en EU) → queda PENDING para proceso manual
-      stripeError = e instanceof Error ? e.message : "Stripe instant no disponible";
-      console.warn("[instant-payout] Stripe instant failed, manual processing:", stripeError);
+    } else {
+      // Cuenta local (test): simular éxito
+      method  = "standard";
+      message = `Solicitud registrada. PayForce procesará la transferencia de ${(requestedAmount / 100).toFixed(2)} € en los próximos 30 minutos.`;
     }
 
-    // Marcar splits como "processing" para que no se dupliquen en otra solicitud
+    // Marcar splits como "processing"
     await db.merchantSplit.updateMany({
       where: { connectedAccountId: account.id, status: "pending" },
       data:  { status: "processing" },
     });
 
     return NextResponse.json({
-      ok:             true,
-      requestId:      request.id,
+      ok: true, requestId: request.id,
       requestedAmount,
-      fee:            feeCents,
-      netAmount:      netCents,
+      fee:            method === "instant" ? feeCents : 0,
+      netAmount:      method === "instant" ? amountAfterFee : requestedAmount,
       status:         stripePayoutId ? "PROCESSING" : "PENDING",
+      method,
       stripePayoutId: stripePayoutId ?? null,
-      message:        stripePayoutId
-        ? `Pago de €${(netCents/100).toFixed(2)} en proceso. Llegará en minutos.`
-        : `Solicitud registrada. PayForce procesará la transferencia de €${(netCents/100).toFixed(2)} en los próximos 30 minutos.`,
+      message,
     });
   } catch (err) {
     if (err instanceof AuthError) return NextResponse.json({ error: err.message }, { status: err.status });
-    console.error("[instant-payout POST]", err);
     return NextResponse.json({ error: err instanceof Error ? err.message : "Error interno" }, { status: 500 });
   }
 }

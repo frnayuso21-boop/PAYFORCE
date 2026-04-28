@@ -135,6 +135,11 @@ model ConnectedAccount {
 
   stripeMetadata String? // JSON stringificado
 
+  // Instant Payouts — tarjeta de débito vinculada
+  instantPayoutsEnabled Boolean @default(false)
+  debitCardLast4        String?
+  debitCardBrand        String?
+
   // Tienda personalizada (subdominio mi-negocio.payforce.io)
   slug             String? @unique   // "mi-negocio" → mi-negocio.payforce.io
   storeDescription String?           // Descripción pública de la tienda
