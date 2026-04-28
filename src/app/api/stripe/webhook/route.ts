@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import { stripe, webhookSecret } from "@/lib/stripe";
 import { db } from "@/lib/db";
 import { resolveConnectStatus } from "@/lib/connect";
+import { sendPaymentReceiptEmail } from "@/lib/email";
 
 export const runtime = "nodejs";
 
@@ -242,6 +243,26 @@ async function handlePaymentSucceeded(pi: Stripe.PaymentIntent, eventId: string,
       });
     }
     log.info("payment_link.paid", { eventId, token });
+  }
+
+  // Email de confirmación al pagador — no bloquea el webhook si falla
+  if (pi.receipt_email) {
+    sendPaymentReceiptEmail({
+      to:              pi.receipt_email,
+      merchantName:    account.businessName || "PayForce",
+      amount:          pi.amount,
+      currency:        pi.currency,
+      description:     pi.description ?? null,
+      paymentIntentId: pi.id,
+      createdAt:       new Date(pi.created * 1000),
+    }).catch((err: unknown) => {
+      log.warn("payment.receipt_email.failed", {
+        eventId,
+        paymentIntentId: pi.id,
+        to: pi.receipt_email,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
   }
 }
 

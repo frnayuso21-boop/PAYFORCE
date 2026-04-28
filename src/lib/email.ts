@@ -71,3 +71,109 @@ export async function sendCardInvitationEmail(opts: {
 
   if (error) throw new Error(error.message);
 }
+
+// ─── Email: confirmación de pago al cliente ───────────────────────────────────
+export async function sendPaymentReceiptEmail(opts: {
+  to:           string;
+  merchantName: string;
+  amount:       number;
+  currency:     string;
+  description:  string | null;
+  paymentIntentId: string;
+  createdAt:    Date;
+}) {
+  const { to, merchantName, amount, currency, description, paymentIntentId, createdAt } = opts;
+
+  const formattedAmount = (amount / 100).toFixed(2);
+  const symbol = currency.toLowerCase() === "eur" ? "€" : currency.toUpperCase();
+  const formattedDate = createdAt.toLocaleDateString("es-ES", {
+    day: "numeric", month: "long", year: "numeric",
+  });
+  const shortRef = `${paymentIntentId.substring(0, 16)}...`;
+
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/></head>
+<body style="margin:0;padding:0;background:#F5F5F7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 16px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
+
+        <tr><td align="center" style="padding-bottom:28px;">
+          <table cellpadding="0" cellspacing="0"><tr><td>
+            <svg width="28" height="28" viewBox="0 0 28 28" style="vertical-align:middle;">
+              <path d="M14 2L25.5 8.5V21.5L14 28L2.5 21.5V8.5L14 2Z" fill="#0A0A0A"/>
+            </svg>
+          </td><td style="padding-left:8px;vertical-align:middle;">
+            <span style="font-size:14px;font-weight:600;letter-spacing:0.06em;color:#0A0A0A;text-transform:uppercase;">${merchantName}</span>
+          </td></tr></table>
+        </td></tr>
+
+        <tr><td style="background:#fff;border-radius:16px;padding:36px 32px;box-shadow:0 2px 16px rgba(0,0,0,0.07);">
+
+          <p style="margin:0 0 8px;font-size:24px;font-weight:600;color:#0A0A0A;letter-spacing:-0.5px;">
+            Pago confirmado
+          </p>
+          <p style="margin:0 0 32px;font-size:15px;color:#6B7280;line-height:1.6;">
+            Hemos procesado tu pago correctamente.
+          </p>
+
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#F9FAFB;border-radius:8px;border:0.5px solid #E5E7EB;margin-bottom:24px;">
+            <tr><td style="padding:20px 24px;">
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="font-size:13px;color:#6B7280;padding-bottom:12px;">Importe</td>
+                  <td align="right" style="font-size:13px;font-weight:600;color:#0A0A0A;padding-bottom:12px;">${formattedAmount}${symbol}</td>
+                </tr>
+                <tr>
+                  <td style="font-size:13px;color:#6B7280;padding-bottom:12px;">Concepto</td>
+                  <td align="right" style="font-size:13px;color:#0A0A0A;padding-bottom:12px;">${description ?? "Pago"}</td>
+                </tr>
+                <tr>
+                  <td style="font-size:13px;color:#6B7280;padding-bottom:12px;">Fecha</td>
+                  <td align="right" style="font-size:13px;color:#0A0A0A;padding-bottom:12px;">${formattedDate}</td>
+                </tr>
+                <tr>
+                  <td style="font-size:13px;color:#6B7280;">Referencia</td>
+                  <td align="right" style="font-size:13px;color:#0A0A0A;font-family:monospace;">${shortRef}</td>
+                </tr>
+              </table>
+            </td></tr>
+          </table>
+
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#EAF3DE;border-radius:8px;margin-bottom:32px;">
+            <tr><td style="padding:16px 20px;">
+              <p style="margin:0;font-size:13px;color:#27500A;line-height:1.6;">
+                ✅ Tu pago ha sido procesado correctamente. Guarda este email como comprobante.
+              </p>
+            </td></tr>
+          </table>
+
+          <table width="100%" cellpadding="0" cellspacing="0" style="border-top:0.5px solid #E5E7EB;">
+            <tr><td style="padding-top:24px;">
+              <p style="margin:0;font-size:12px;color:#9CA3AF;line-height:1.7;">
+                Este email es un comprobante automático de pago.<br/>
+                Para cualquier consulta contacta con <strong>${merchantName}</strong> directamente.
+              </p>
+              <p style="margin:8px 0 0;font-size:12px;color:#9CA3AF;">
+                Procesado de forma segura por PayForce
+              </p>
+            </td></tr>
+          </table>
+
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  const { error } = await getResend().emails.send({
+    from:    "pagos@payforce.co",
+    to:      [to],
+    subject: `Confirmación de pago — ${merchantName}`,
+    html,
+  });
+
+  if (error) throw new Error(error.message);
+}
