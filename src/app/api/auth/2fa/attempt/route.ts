@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
  */
 export async function GET(req: NextRequest) {
   try {
-    const { user } = await requireAuth(req, { skipPayforce2faGate: true });
+    const { user } = await requireAuth(req);
 
     const dbUser = await db.user.findUnique({
       where:  { id: user.id },
