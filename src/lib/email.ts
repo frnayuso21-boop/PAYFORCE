@@ -1,6 +1,6 @@
 import { Resend } from "resend";
 
-const FROM = process.env.EMAIL_FROM ?? "PayForce <cobros@payforce.app>";
+const FROM = process.env.EMAIL_FROM ?? "PayForce <pagos@payforce.co>";
 const APP  = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
 function getResend() {
@@ -169,7 +169,7 @@ export async function sendPaymentReceiptEmail(opts: {
 </html>`;
 
   const { error } = await getResend().emails.send({
-    from:    "pagos@payforce.co",
+    from:    "PayForce <pagos@payforce.co>",
     to:      [to],
     subject: `Confirmación de pago — ${merchantName}`,
     html,

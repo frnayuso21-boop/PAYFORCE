@@ -9,7 +9,7 @@ function getResend() {
   return new Resend(process.env.RESEND_API_KEY);
 }
 
-const FROM_EMAIL = "informes@payforce.co";
+const FROM_EMAIL = "PayForce <pagos@payforce.co>";
 
 function buildHtml(manager: Manager, report: ReportData): string {
   const { period, totalAmount, transactionCount, changeVsPrev, businessName } = report;
