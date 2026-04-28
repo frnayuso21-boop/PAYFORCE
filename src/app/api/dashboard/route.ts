@@ -150,6 +150,8 @@ export async function GET(req: NextRequest) {
       })),
       disputes,
       connect,
+    }, {
+      headers: { "Cache-Control": "private, max-age=15, stale-while-revalidate=30" },
     });
   } catch (err) {
     if (err instanceof AuthError) {

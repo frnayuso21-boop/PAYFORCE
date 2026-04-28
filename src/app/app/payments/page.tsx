@@ -305,8 +305,30 @@ export default function PaymentsPage() {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <RefreshCw className="h-5 w-5 animate-spin text-slate-300" />
+          <div className="divide-y" style={{ borderColor: "#F1F5F9" }}>
+            {[...Array(8)].map((_, i) => (
+              <div
+                key={i}
+                className="grid items-center px-5 py-3.5"
+                style={{ gridTemplateColumns: "1.6fr 1fr 2fr 1.5fr 1.2fr 1fr 1fr 100px 24px" }}
+              >
+                <div className="h-4 w-20 animate-pulse rounded-md bg-slate-100" />
+                <div className="h-5 w-16 animate-pulse rounded-full bg-slate-100" />
+                <div className="h-3.5 w-32 animate-pulse rounded bg-slate-100" />
+                <div className="space-y-1.5">
+                  <div className="h-3 w-24 animate-pulse rounded bg-slate-100" />
+                  <div className="h-3 w-28 animate-pulse rounded bg-slate-100" />
+                </div>
+                <div className="space-y-1.5">
+                  <div className="h-3 w-20 animate-pulse rounded bg-slate-100" />
+                  <div className="h-3 w-12 animate-pulse rounded bg-slate-100" />
+                </div>
+                <div className="h-3.5 w-14 animate-pulse rounded bg-slate-100 ml-auto" />
+                <div className="h-3.5 w-14 animate-pulse rounded bg-slate-100 ml-auto" />
+                <div />
+                <div className="h-4 w-4 animate-pulse rounded bg-slate-100 ml-auto" />
+              </div>
+            ))}
           </div>
         ) : visible.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 gap-3 text-slate-300">

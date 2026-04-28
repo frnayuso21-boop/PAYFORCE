@@ -44,7 +44,9 @@ export async function GET(req: NextRequest) {
     };
 
     if (accountIds.length === 0) {
-      return NextResponse.json(emptyResponse);
+      return NextResponse.json(emptyResponse, {
+        headers: { "Cache-Control": "private, max-age=30, stale-while-revalidate=60" },
+      });
     }
 
     const accountFilter = { connectedAccountId: { in: accountIds } };
@@ -119,6 +121,8 @@ export async function GET(req: NextRequest) {
         feesChange:   pct(totalFees, prevFees),
       },
       chartSeries,
+    }, {
+      headers: { "Cache-Control": "private, max-age=30, stale-while-revalidate=60" },
     });
   } catch (err) {
     if (err instanceof AuthError) {

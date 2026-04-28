@@ -25,20 +25,17 @@ export async function GET(req: NextRequest) {
     let transfers: Transfer[] = [];
 
     if (isRealStripe) {
-      // Saldo real desde Stripe
-      const balance = await stripe.balance.retrieve(
-        {},
-        { stripeAccount: account.stripeAccountId }
-      );
+      // Saldo y transferencias en paralelo
+      const [balance, stripeTransfers] = await Promise.all([
+        stripe.balance.retrieve({}, { stripeAccount: account.stripeAccountId }),
+        stripe.transfers.list({ destination: account.stripeAccountId, limit: 30 }),
+      ]);
+
       const eurAvail = balance.available.find((b) => b.currency === "eur");
       const eurPend  = balance.pending.find((b) => b.currency === "eur");
       available = eurAvail?.amount ?? 0;
       pending   = eurPend?.amount ?? 0;
 
-      // Historial de transferencias recibidas
-      const stripeTransfers = await stripe.transfers.list(
-        { destination: account.stripeAccountId, limit: 30 },
-      );
       transfers = stripeTransfers.data.map((t) => ({
         id:          t.id,
         date:        new Date(t.created * 1000).toISOString(),
@@ -50,6 +47,7 @@ export async function GET(req: NextRequest) {
           : account.stripeAccountId,
         description: t.description ?? null,
       }));
+
     } else {
       // Datos locales de splits cuando no hay cuenta Stripe real
       const splits = await db.merchantSplit.findMany({
@@ -86,7 +84,9 @@ export async function GET(req: NextRequest) {
     });
     const thisMonth = agg._sum.totalAmount ?? 0;
 
-    return NextResponse.json({ available, pending, thisMonth, transfers, currency: "eur" });
+    return NextResponse.json({ available, pending, thisMonth, transfers, currency: "eur" }, {
+      headers: { "Cache-Control": "private, max-age=30, stale-while-revalidate=60" },
+    });
   } catch (err) {
     if (err instanceof AuthError)
       return NextResponse.json({ error: err.message }, { status: err.status });

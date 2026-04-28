@@ -14,22 +14,6 @@ export async function GET(req: NextRequest) {
     const startingAfter = searchParams.get("starting_after"); // cursor for pagination
 
     const account = await getUserPrimaryAccount(user.id);
-
-    console.log("=== PAYMENTS DEBUG ===");
-    console.log("User ID:", user.id);
-    console.log("Account found:", account?.id ?? "NO ENCONTRADO");
-    console.log("Account stripeAccountId:", account?.stripeAccountId ?? "—");
-
-    // Diagnóstico: todos los pagos en BD
-    const allPayments = await db.payment.findMany({ select: { id: true, connectedAccountId: true } });
-    console.log("ALL payments in DB:", allPayments.length);
-    allPayments.forEach((p) => console.log("  Payment:", p.id, "| connectedAccountId:", p.connectedAccountId));
-
-    if (account) {
-      const dbCheck = await db.payment.findMany({ where: { connectedAccountId: account.id }, select: { id: true } });
-      console.log("DB payments for this account:", dbCheck.length);
-    }
-
     if (!account) return NextResponse.json({ payments: [], hasMore: false });
 
     const isRealStripe = !account.stripeAccountId.startsWith("local_");
@@ -55,7 +39,6 @@ export async function GET(req: NextRequest) {
         where:   { connectedAccountId: account.id },
         orderBy: { createdAt: "desc" },
       });
-      console.log("[payments] Stripe charges:", allCharges.length, "| BD payments:", dbPayments.length, "| connectedAccountId:", account.id);
 
       // IDs de Stripe ya presentes para evitar duplicados
       const stripeIds = new Set(allCharges.map((c) => c.id));
@@ -125,7 +108,9 @@ export async function GET(req: NextRequest) {
         return true;
       });
 
-      return NextResponse.json({ payments, hasMore: false });
+      return NextResponse.json({ payments, hasMore: false }, {
+        headers: { "Cache-Control": "private, max-age=30, stale-while-revalidate=60" },
+      });
     }
 
     // ── Fallback: datos locales de BD ─────────────────────────────────────
@@ -139,7 +124,6 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: "desc" },
       take:    limit,
     });
-    console.log("[payments] fallback BD | accountIds:", accountIds, "| pagos:", dbPayments.length);
 
     const payments = dbPayments.map((p) => ({
       id:          p.id,
@@ -158,7 +142,9 @@ export async function GET(req: NextRequest) {
       paymentIntentId: p.stripePaymentIntentId ?? null,
     }));
 
-    return NextResponse.json({ payments, hasMore: false });
+    return NextResponse.json({ payments, hasMore: false }, {
+      headers: { "Cache-Control": "private, max-age=30, stale-while-revalidate=60" },
+    });
   } catch (err) {
     if (err instanceof AuthError)
       return NextResponse.json({ error: err.message }, { status: err.status });

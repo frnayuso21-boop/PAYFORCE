@@ -13,7 +13,9 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: "desc" },
     });
 
-    return NextResponse.json({ managers });
+    return NextResponse.json({ managers }, {
+      headers: { "Cache-Control": "private, max-age=30, stale-while-revalidate=60" },
+    });
   } catch (err) {
     console.error("[GET /managers]", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
