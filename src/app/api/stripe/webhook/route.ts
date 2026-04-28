@@ -4,6 +4,7 @@ import { stripe, webhookSecret } from "@/lib/stripe";
 import { db } from "@/lib/db";
 import { resolveConnectStatus } from "@/lib/connect";
 import { sendPaymentReceiptEmail } from "@/lib/email";
+import { sendPushToUser } from "@/lib/webpush";
 
 export const runtime = "nodejs";
 
@@ -243,6 +244,17 @@ async function handlePaymentSucceeded(pi: Stripe.PaymentIntent, eventId: string,
       });
     }
     log.info("payment_link.paid", { eventId, token });
+  }
+
+  // Notificación push al merchant — no bloquea el webhook si falla
+  if (account.userId) {
+    const amountFormatted = (pi.amount / 100).toFixed(2);
+    const description     = pi.description ?? "Nuevo pago";
+    sendPushToUser(account.userId, {
+      title: "💳 Nuevo pago recibido",
+      body:  `${amountFormatted}€ — ${description}`,
+      url:   "/app/dashboard",
+    }).catch(() => null);
   }
 
   // Email de confirmación al pagador — no bloquea el webhook si falla

@@ -47,6 +47,7 @@ model User {
   paymentLinks      PaymentLink[]
   onboardingProfile OnboardingProfile?
   auditLogs         AuditLog[]
+  pushSubscriptions PushSubscription[]
 
   // 2FA PayForce (TOTP otplib; secret cifrado AES-256-GCM)
   twoFactorEnabled       Boolean   @default(false)
@@ -954,4 +955,21 @@ model AuditLog {
   @@index([createdAt])
   @@index([userId, createdAt])
   @@map("audit_logs")
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║  PUSH SUBSCRIPTIONS                                                          ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("push_subscriptions")
 }

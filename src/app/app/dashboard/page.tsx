@@ -8,7 +8,7 @@ import {
   Download, Plus, AlertTriangle, Clock,
   CheckCircle2, XCircle, Database, ArrowUpRight, RefreshCw,
   TrendingUp, Smartphone, Link2, MessageCircle,
-  RotateCcw, Copy, X, Loader2, ExternalLink,
+  RotateCcw, Copy, X, Loader2, ExternalLink, Bell, BellOff,
 } from "lucide-react";
 import { Button }            from "@/components/ui/button";
 import { BalanceCard }       from "@/components/dashboard/BalanceCard";
@@ -293,6 +293,61 @@ export default function DashboardPage() {
         status:           dashData.connect.status.toLowerCase() as ConnectAccount["status"],
       }
     : EMPTY_CONNECT;
+
+  // ── Notificaciones push ───────────────────────────────────────────────────
+  const [pushStatus,  setPushStatus]  = useState<"idle" | "loading" | "active" | "denied">("idle");
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+    if (Notification.permission === "denied") { setPushStatus("denied"); return; }
+    navigator.serviceWorker?.getRegistration("/sw.js").then(async (reg) => {
+      if (!reg) return;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) setPushStatus("active");
+    }).catch(() => null);
+  }, []);
+
+  async function handleTogglePush() {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      alert("Tu navegador no soporta notificaciones push.");
+      return;
+    }
+    if (pushStatus === "active") {
+      // Desactivar
+      const reg = await navigator.serviceWorker.getRegistration("/sw.js");
+      const sub = await reg?.pushManager.getSubscription();
+      if (sub) {
+        await fetch("/api/notifications/subscribe", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ endpoint: sub.endpoint }),
+        });
+        await sub.unsubscribe();
+      }
+      setPushStatus("idle");
+      return;
+    }
+    setPushStatus("loading");
+    try {
+      const reg = await navigator.serviceWorker.register("/sw.js");
+      await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly:      true,
+        applicationServerKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+      });
+      const json = sub.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } };
+      const res  = await fetch("/api/notifications/subscribe", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ endpoint: json.endpoint, keys: json.keys }),
+      });
+      if (res.ok) setPushStatus("active");
+      else        setPushStatus("idle");
+    } catch (err) {
+      if ((err as { name?: string })?.name === "NotAllowedError") setPushStatus("denied");
+      else setPushStatus("idle");
+    }
+  }
 
   // ─── VISTA MOBILE ────────────────────────────────────────────────────────────
   const [showWhatsApp, setShowWhatsApp] = useState(false);
@@ -752,6 +807,29 @@ export default function DashboardPage() {
             >
               <RefreshCw className={cn("h-3 w-3", refreshing && "animate-spin")} />
               {lastUpdate}
+            </button>
+          )}
+          {/* Botón notificaciones push */}
+          {pushStatus !== "denied" && (
+            <button
+              onClick={handleTogglePush}
+              disabled={pushStatus === "loading"}
+              title={pushStatus === "active" ? "Desactivar notificaciones" : "Activar notificaciones de pago"}
+              className={cn(
+                "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors",
+                pushStatus === "active"
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
+                pushStatus === "loading" && "opacity-60 cursor-not-allowed",
+              )}
+            >
+              {pushStatus === "loading" ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : pushStatus === "active" ? (
+                <><Bell className="h-3.5 w-3.5" />Notificaciones activas</>
+              ) : (
+                <><BellOff className="h-3.5 w-3.5" />Activar notificaciones</>
+              )}
             </button>
           )}
           <Button variant="outline" size="sm" className="gap-1.5 rounded-lg text-slate-600">
