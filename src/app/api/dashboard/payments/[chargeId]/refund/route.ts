@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { db } from "@/lib/db";
 import { requireAuth, getUserPrimaryAccount, AuthError } from "@/lib/auth";
+import { logAuthSecurityAudit } from "@/lib/supabaseSecurityAudit";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,8 @@ export async function POST(
   { params }: { params: Promise<{ chargeId: string }> },
 ) {
   try {
-    const { user } = await requireAuth(req);
+    const session = await requireAuth(req);
+    const { user } = session;
     const { chargeId } = await params;
 
     const account = await getUserPrimaryAccount(user.id);
@@ -88,6 +90,12 @@ export async function POST(
         data:  { status: "refunded", refundedAmount: charge.amount },
       }).catch(() => {}); // no bloqueante
     }
+
+    await logAuthSecurityAudit(req, session, {
+      action:   "PAYMENT_REFUNDED",
+      resource: "charge",
+      metadata: { chargeId, refundId: refund.id, amount: refund.amount },
+    });
 
     return NextResponse.json({
       success: true,

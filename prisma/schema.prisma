@@ -46,7 +46,23 @@ model User {
   connectedAccounts ConnectedAccount[]
   paymentLinks      PaymentLink[]
   onboardingProfile OnboardingProfile?
-  // Session eliminado — sesiones gestionadas por Supabase Auth
+  auditLogs         AuditLog[]
+
+  // 2FA PayForce (TOTP otplib; secret cifrado AES-256-GCM)
+  twoFactorEnabled       Boolean   @default(false)
+  twoFactorSecret        String?   // secreto activo cifrado
+  twoFactorPendingSecret String?   // secreto pendiente de verificación (cifrado)
+  twoFactorVerifiedAt    DateTime?
+  // JSON: string[] de hashes bcrypt de códigos de respaldo de un solo uso
+  twoFactorBackupCodes   String?
+
+  // Seguridad de sesión
+  lastLoginAt     DateTime?
+  lastLoginIp     String?
+  loginAttempts   Int       @default(0)
+  lockedUntil     DateTime?
+  // JSON string: últimas IPs de inicio de sesión exitoso (máx. 3) para alertas
+  recentLoginIps  String    @default("[]")
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -912,4 +928,30 @@ model BatchResult {
   @@index([customerId])
   @@index([status])
   @@map("batch_results")
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║  AUDIT LOG — Registro de eventos de seguridad                               ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+
+  // ENUM: LOGIN_SUCCESS | LOGIN_FAILED | LOGOUT | 2FA_ENABLED | 2FA_DISABLED
+  //       | 2FA_FAILED | PASSWORD_CHANGED | PAYMENT_REFUNDED | SETTINGS_CHANGED
+  action     String
+  resource   String
+  resourceId String?
+  ipAddress  String?
+  userAgent  String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([userId, createdAt])
+  @@map("audit_logs")
 }

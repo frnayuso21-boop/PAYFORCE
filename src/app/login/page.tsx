@@ -55,19 +55,44 @@ function LoginForm() {
     e.preventDefault();
     setError(""); setLoading(true);
     try {
+      const pre = await fetch("/api/auth/pre-login", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ email: email.trim().toLowerCase() }),
+      });
+      if (!pre.ok) {
+        const j = await pre.json().catch(() => ({})) as { error?: string };
+        setError(j.error ?? "Demasiados intentos. Espera unos minutos.");
+        return;
+      }
+
       const { error: sbError } = await supabase.auth.signInWithPassword({
         email: email.trim().toLowerCase(), password,
       });
       if (sbError) {
+        void fetch("/api/auth/login-failed-audit", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ email: email.trim().toLowerCase() }),
+        });
         setError(sbError.message.includes("Invalid login credentials")
           ? "Email o contraseña incorrectos."
           : sbError.message);
         return;
       }
+
       const { data: aalData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-      if (aalData?.nextLevel === "aal2" && aalData?.currentLevel !== "aal2") {
-        router.push(`/verify?from=${encodeURIComponent(from)}`);
+      const needsSecondFactor =
+        aalData?.nextLevel === "aal2" && aalData?.currentLevel !== "aal2";
+
+      if (needsSecondFactor) {
+        router.push(`/login/2fa?from=${encodeURIComponent(from)}`);
       } else {
+        await fetch("/api/auth/session-audit", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ event: "LOGIN_SUCCESS" }),
+        });
         router.push(from);
       }
       router.refresh();

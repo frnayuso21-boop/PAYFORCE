@@ -2,6 +2,7 @@ import { NextRequest, NextResponse }              from "next/server";
 import { stripe }                                  from "@/lib/stripe";
 import { db }                                      from "@/lib/db";
 import { requireAuth, getUserPrimaryAccount, AuthError } from "@/lib/auth";
+import { logAuthSecurityAudit } from "@/lib/supabaseSecurityAudit";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +34,8 @@ export async function PATCH(req: NextRequest) {
   try {
     // Step 1: Auth
     console.log("[statement-descriptor] PATCH start");
-    const { user } = await requireAuth(req);
+    const session = await requireAuth(req);
+    const { user } = session;
     console.log("[statement-descriptor] user id:", user.id);
 
     // Step 2: Get account
@@ -102,6 +104,11 @@ export async function PATCH(req: NextRequest) {
     }
 
     console.log("[statement-descriptor] PATCH success:", descriptor);
+    await logAuthSecurityAudit(req, session, {
+      action:   "SETTINGS_CHANGED",
+      resource: "statement_descriptor",
+      metadata: { descriptor },
+    });
     return NextResponse.json({ success: true, statementDescriptor: descriptor });
   } catch (err) {
     if (err instanceof AuthError)

@@ -1,343 +1,428 @@
 "use client";
 
-/**
- * /app/settings/security — Gestión de MFA TOTP.
- *
- * Estados posibles:
- *   · "loading"   — cargando factores desde Supabase
- *   · "disabled"  — sin MFA activo → puede activarlo
- *   · "enrolling" — enroll() en curso: muestra QR + campo para verificar
- *   · "enabled"   — factor verificado activo → puede desactivarlo
- */
-
-import { useState, useEffect, FormEvent } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
+import Link from "next/link";
 import {
-  ShieldCheck, ShieldOff, Smartphone, KeyRound, Copy, Check,
+  ShieldCheck, ShieldOff, Shield, Smartphone,
+  Copy, CheckCircle2, AlertTriangle, X, Loader2,
+  Eye, EyeOff,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input }  from "@/components/ui/input";
-import { Label }  from "@/components/ui/label";
 import { createSupabaseClient } from "@/lib/supabase/client";
+import { mfaChallengeAndVerify } from "@/lib/mfaChallengeVerify";
 
-type PageState = "loading" | "disabled" | "enrolling" | "enabled";
+function OtpInput({ value, onChange, disabled }: { value: string; onChange: (v: string) => void; disabled?: boolean }) {
+  const refs  = useRef<(HTMLInputElement | null)[]>([]);
+  const digits = Array.from({ length: 6 }, (_, i) => value[i] ?? "");
 
-interface EnrollData {
-  factorId:  string;
-  qrCode:    string;   // SVG string
-  secret:    string;   // manual entry
+  function handleKey(i: number, e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "Backspace") {
+      e.preventDefault();
+      onChange(value.slice(0, i) + value.slice(i + 1));
+      if (i > 0) refs.current[i - 1]?.focus();
+    }
+  }
+
+  function handleChange(i: number, e: React.ChangeEvent<HTMLInputElement>) {
+    const raw = e.target.value.replace(/\D/g, "");
+    if (!raw) return;
+    const chars = raw.slice(0, 6 - i);
+    onChange((value.slice(0, i) + chars + value.slice(i + chars.length)).slice(0, 6));
+    setTimeout(() => refs.current[Math.min(i + chars.length, 5)]?.focus(), 0);
+  }
+
+  function handlePaste(e: React.ClipboardEvent) {
+    e.preventDefault();
+    const p = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    onChange(p);
+    setTimeout(() => refs.current[Math.min(p.length, 5)]?.focus(), 0);
+  }
+
+  return (
+    <div className="flex items-center gap-2.5 flex-wrap">
+      {digits.map((d, i) => (
+        <input
+          key={i}
+          ref={(el) => { refs.current[i] = el; }}
+          type="text"
+          inputMode="numeric"
+          maxLength={1}
+          value={d}
+          disabled={disabled}
+          onChange={(e) => handleChange(i, e)}
+          onKeyDown={(e) => handleKey(i, e)}
+          onPaste={handlePaste}
+          onFocus={(e) => e.target.select()}
+          className="h-12 w-10 rounded-xl border-2 border-slate-200 bg-white text-center text-[20px] font-semibold text-slate-900 outline-none transition-all focus:border-slate-800 focus:ring-2 focus:ring-slate-100 disabled:opacity-50"
+          style={{ caretColor: "transparent" }}
+        />
+      ))}
+    </div>
+  );
 }
+
+type Step = "idle" | "enrolling" | "confirming" | "done";
 
 export default function SecurityPage() {
   const supabase = createSupabaseClient();
 
-  const [state,       setState]       = useState<PageState>("loading");
-  const [enrollData,  setEnrollData]  = useState<EnrollData | null>(null);
-  const [activeId,    setActiveId]    = useState<string | null>(null); // factorId del factor verificado
-  const [code,        setCode]        = useState("");
-  const [copied,      setCopied]      = useState(false);
-  const [error,       setError]       = useState("");
-  const [working,     setWorking]     = useState(false);
+  const [twoFAEnabled, setTwoFAEnabled] = useState<boolean | null>(null);
+  const [loading,      setLoading]      = useState(true);
 
-  // ── Cargar estado inicial ────────────────────────────────────────────────
-  useEffect(() => {
-    loadFactors();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const [step,         setStep]         = useState<Step>("idle");
+  const [enrollData,   setEnrollData]   = useState<{
+    qrCode: string;
+    secret: string;
+    factorId: string;
+  } | null>(null);
+  const [confirmCode,  setConfirmCode]  = useState("");
+  const [confirmError, setConfirmError] = useState("");
+  const [confirmLoading, setConfirmLoading] = useState(false);
 
-  async function loadFactors() {
-    setState("loading");
-    setError("");
-    const { data, error: err } = await supabase.auth.mfa.listFactors();
-    if (err || !data) {
-      setError("Error al cargar la configuración de seguridad.");
-      setState("disabled");
-      return;
-    }
-    const verified = data.totp.find((f) => f.status === "verified");
-    if (verified) {
-      setActiveId(verified.id);
-      setState("enabled");
-    } else {
-      setState("disabled");
+  const [disabling,    setDisabling]    = useState(false);
+  const [disableError, setDisableError] = useState("");
+
+  const [copied, setCopied] = useState(false);
+  const [showSecret, setShowSecret] = useState(false);
+
+  useEffect(() => { void loadStatus(); }, []);
+
+  async function loadStatus() {
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.mfa.listFactors();
+      if (error) throw error;
+      const verified = data?.totp?.filter((f) => f.status === "verified") ?? [];
+      setTwoFAEnabled(verified.length > 0);
+    } catch {
+      setTwoFAEnabled(false);
+    } finally {
+      setLoading(false);
     }
   }
 
-  // ── Paso 1: iniciar enrollment ───────────────────────────────────────────
-  async function handleStartEnroll() {
-    setError("");
-    setWorking(true);
+  async function startEnroll() {
+    setStep("enrolling");
+    setEnrollData(null);
+    setConfirmCode("");
+    setConfirmError("");
+
     try {
-      // Limpiar factores no verificados (enrollments incompletos)
-      const { data: factors } = await supabase.auth.mfa.listFactors();
-      if (factors) {
-        for (const f of factors.totp) {
-          if ((f.status as string) === "unverified") {
-            await supabase.auth.mfa.unenroll({ factorId: f.id });
-          }
-        }
-      }
-
-      const { data, error: enrollErr } = await supabase.auth.mfa.enroll({
+      const { data, error } = await supabase.auth.mfa.enroll({
         factorType: "totp",
-        friendlyName: "PayForce Authenticator",
+        issuer:     "PayForce",
       });
-
-      if (enrollErr || !data || data.type !== "totp") {
-        setError(enrollErr?.message ?? "Error al iniciar la activación MFA.");
-        return;
+      if (error) throw error;
+      if (!data?.totp?.qr_code || !data.totp.secret || !data.id) {
+        throw new Error("Respuesta incompleta del servidor");
       }
-
       setEnrollData({
-        factorId: data.id,
         qrCode:   data.totp.qr_code,
         secret:   data.totp.secret,
+        factorId: data.id,
       });
-      setState("enrolling");
-      setCode("");
-    } catch {
-      setError("Error de red. Inténtalo de nuevo.");
-    } finally {
-      setWorking(false);
+      setStep("confirming");
+    } catch (err) {
+      setConfirmError(err instanceof Error ? err.message : "Error al iniciar configuración");
+      setStep("idle");
     }
   }
 
-  // ── Paso 2: verificar y activar ──────────────────────────────────────────
-  async function handleConfirmEnroll(e: FormEvent) {
-    e.preventDefault();
+  const confirmEnroll = useCallback(async (code: string) => {
+    if (!enrollData || code.length !== 6) return;
+    setConfirmLoading(true);
+    setConfirmError("");
+
+    try {
+      const { error: ve } = await mfaChallengeAndVerify(supabase, enrollData.factorId, code);
+      if (ve) {
+        setConfirmError("Código incorrecto");
+        setConfirmCode("");
+        return;
+      }
+
+      const sync = await fetch("/api/auth/2fa/sync", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ enabled: true }),
+      });
+      if (!sync.ok) {
+        const j = await sync.json().catch(() => ({})) as { error?: string };
+        throw new Error(j.error ?? "Error al sincronizar");
+      }
+
+      setTwoFAEnabled(true);
+      setStep("done");
+    } catch (err) {
+      setConfirmError(err instanceof Error ? err.message : "Error al verificar");
+    } finally {
+      setConfirmLoading(false);
+    }
+  }, [enrollData, supabase]);
+
+  useEffect(() => {
+    if (step === "confirming" && confirmCode.length === 6 && !confirmLoading && enrollData) {
+      void confirmEnroll(confirmCode);
+    }
+  }, [step, confirmCode, confirmLoading, enrollData, confirmEnroll]);
+
+  async function disableTwoFA() {
+    if (!confirm("¿Desactivar el 2FA? Tu cuenta quedará menos protegida.")) return;
+    setDisabling(true);
+    setDisableError("");
+
+    try {
+      const { data, error } = await supabase.auth.mfa.listFactors();
+      if (error) throw error;
+      const factors = data?.totp?.filter((f) => f.status === "verified") ?? [];
+      for (const f of factors) {
+        const { error: ue } = await supabase.auth.mfa.unenroll({ factorId: f.id });
+        if (ue) throw ue;
+      }
+
+      const sync = await fetch("/api/auth/2fa/sync", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ enabled: false }),
+      });
+      if (!sync.ok) {
+        const j = await sync.json().catch(() => ({})) as { error?: string };
+        throw new Error(j.error ?? "Error al sincronizar");
+      }
+
+      setTwoFAEnabled(false);
+      setStep("idle");
+      setEnrollData(null);
+    } catch (err) {
+      setDisableError(err instanceof Error ? err.message : "Error al desactivar");
+    } finally {
+      setDisabling(false);
+    }
+  }
+
+  function copySecret() {
     if (!enrollData) return;
-    setError("");
-    setWorking(true);
-
-    try {
-      // Crear challenge
-      const { data: challenge, error: challengeErr } = await supabase.auth.mfa.challenge({
-        factorId: enrollData.factorId,
-      });
-      if (challengeErr || !challenge) {
-        setError("Error al crear el challenge MFA.");
-        return;
-      }
-
-      // Verificar código
-      const { error: verifyErr } = await supabase.auth.mfa.verify({
-        factorId:   enrollData.factorId,
-        challengeId: challenge.id,
-        code:        code.trim(),
-      });
-
-      if (verifyErr) {
-        setError(
-          verifyErr.message.includes("Invalid")
-            ? "Código incorrecto. Comprueba que tu app esté sincronizada y vuelve a intentarlo."
-            : verifyErr.message,
-        );
-        setCode("");
-        return;
-      }
-
-      // Éxito — recargar factores
-      await loadFactors();
-    } catch {
-      setError("Error de red. Inténtalo de nuevo.");
-    } finally {
-      setWorking(false);
-    }
+    navigator.clipboard.writeText(enrollData.secret).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
   }
 
-  // ── Desactivar MFA ───────────────────────────────────────────────────────
-  async function handleUnenroll() {
-    if (!activeId) return;
-    if (!confirm("¿Seguro que quieres desactivar la verificación en dos pasos? Tu cuenta quedará menos protegida.")) return;
-    setError("");
-    setWorking(true);
-    try {
-      const { error: unenrollErr } = await supabase.auth.mfa.unenroll({ factorId: activeId });
-      if (unenrollErr) {
-        setError(unenrollErr.message);
-        return;
-      }
-      setActiveId(null);
-      setState("disabled");
-    } catch {
-      setError("Error al desactivar MFA.");
-    } finally {
-      setWorking(false);
-    }
-  }
-
-  // ── Copiar secret ────────────────────────────────────────────────────────
-  async function handleCopy() {
-    if (!enrollData?.secret) return;
-    await navigator.clipboard.writeText(enrollData.secret);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
-  // ── Render ───────────────────────────────────────────────────────────────
   return (
-    <div className="max-w-2xl space-y-8">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-900">Seguridad</h1>
-        <p className="mt-1 text-sm text-slate-400">
-          Gestiona la verificación en dos pasos de tu cuenta
-        </p>
-      </div>
+    <div className="min-h-screen bg-[#f5f5f7] px-6 py-8">
+      <div className="mx-auto max-w-2xl space-y-6">
 
-      {/* ── Panel principal ──────────────────────────────────────────────── */}
-      <section className="rounded-2xl border border-slate-100 bg-white p-6 space-y-6">
-        <h2 className="text-[13px] font-semibold uppercase tracking-widest text-slate-400">
-          Autenticación en dos pasos (2FA)
-        </h2>
+        <div>
+          <h1 className="text-[22px] font-semibold tracking-tight text-[#1d1d1f]">Seguridad</h1>
+          <p className="mt-1 text-[13px] text-[#6e6e73]">
+            Autenticación en dos pasos (TOTP) con Supabase MFA y registro de actividad.
+          </p>
+          <Link
+            href="/dashboard/security"
+            className="mt-3 inline-block text-[13px] font-medium text-[#0071e3] hover:underline"
+          >
+            Ver actividad reciente en seguridad →
+          </Link>
+        </div>
 
-        {/* LOADING */}
-        {state === "loading" && (
-          <p className="text-sm text-slate-400">Cargando configuración…</p>
-        )}
-
-        {/* ERROR GLOBAL */}
-        {error && (
-          <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">{error}</p>
-        )}
-
-        {/* DISABLED — sin MFA activo */}
-        {state === "disabled" && (
-          <div className="space-y-4">
-            <div className="flex items-start gap-3 rounded-xl bg-amber-50 border border-amber-100 p-4">
-              <ShieldOff className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
+        <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden">
+          <div className="flex items-start justify-between px-6 py-5 border-b border-slate-100">
+            <div className="flex items-start gap-3">
+              <div className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+                twoFAEnabled ? "bg-emerald-50" : "bg-slate-100"
+              }`}>
+                {twoFAEnabled
+                  ? <ShieldCheck className="h-5 w-5 text-emerald-600" />
+                  : <Shield className="h-5 w-5 text-slate-400" />
+                }
+              </div>
               <div>
-                <p className="text-sm font-medium text-amber-800">
-                  Verificación en dos pasos desactivada
-                </p>
-                <p className="mt-0.5 text-xs text-amber-600">
-                  Actívala para proteger tu cuenta con un segundo factor de autenticación.
+                <p className="text-[15px] font-semibold text-slate-900">Autenticación en dos pasos</p>
+                <p className="mt-0.5 text-[13px] text-slate-500">
+                  Google Authenticator, Authy u otra app compatible (TOTP).
                 </p>
               </div>
             </div>
-            <Button onClick={handleStartEnroll} disabled={working} className="gap-2">
-              <Smartphone className="h-4 w-4" />
-              {working ? "Preparando…" : "Activar verificación en dos pasos"}
-            </Button>
-          </div>
-        )}
-
-        {/* ENROLLING — mostrar QR y verificar */}
-        {state === "enrolling" && enrollData && (
-          <div className="space-y-6">
-            <div className="flex items-start gap-3 rounded-xl bg-blue-50 border border-blue-100 p-4">
-              <Smartphone className="mt-0.5 h-5 w-5 shrink-0 text-blue-500" />
-              <div className="text-sm text-blue-800 space-y-1">
-                <p className="font-medium">Configura tu app de autenticación</p>
-                <ol className="text-xs text-blue-700 space-y-1 list-decimal list-inside">
-                  <li>Abre Google Authenticator, Authy o 1Password</li>
-                  <li>Escanea el código QR de abajo</li>
-                  <li>Introduce el código de 6 dígitos que te muestre la app</li>
-                </ol>
-              </div>
-            </div>
-
-            {/* QR Code */}
-            <div className="flex flex-col items-center gap-3">
-              <div
-                className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm"
-                dangerouslySetInnerHTML={{
-                  __html: enrollData.qrCode,
-                }}
-                style={{ width: 200, height: 200 }}
-              />
-              <p className="text-xs text-slate-400">
-                ¿No puedes escanear el QR?
-              </p>
-
-              {/* Secret manual */}
-              <div className="flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                <KeyRound className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                <span className="flex-1 font-mono text-xs tracking-widest text-slate-600 break-all">
-                  {enrollData.secret}
+            <div className="shrink-0 ml-4">
+              {loading ? (
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-slate-600" />
+              ) : (
+                <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                  twoFAEnabled
+                    ? "bg-emerald-50 text-emerald-700"
+                    : "bg-slate-100 text-slate-500"
+                }`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${twoFAEnabled ? "bg-emerald-500" : "bg-slate-400"}`} />
+                  {twoFAEnabled ? "Activado" : "Desactivado"}
                 </span>
+              )}
+            </div>
+          </div>
+
+          <div className="px-6 py-5">
+            {loading ? (
+              <div className="space-y-3">
+                <div className="h-4 w-48 animate-pulse rounded bg-slate-100" />
+                <div className="h-10 w-32 animate-pulse rounded-xl bg-slate-100" />
+              </div>
+            ) : twoFAEnabled && step !== "idle" && step !== "done" ? null : twoFAEnabled ? (
+              <div className="space-y-4">
+                <div className="flex items-start gap-2 rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-3">
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                  <p className="text-[13px] text-emerald-800">
+                    Tu cuenta está protegida con MFA de Supabase (TOTP).
+                  </p>
+                </div>
+                {disableError && (
+                  <p className="text-[13px] text-red-600 rounded-xl bg-red-50 px-4 py-3">{disableError}</p>
+                )}
                 <button
-                  type="button"
-                  onClick={handleCopy}
-                  className="shrink-0 rounded-lg p-1 text-slate-400 transition hover:bg-slate-200 hover:text-slate-700"
-                  title="Copiar"
+                  onClick={() => void disableTwoFA()}
+                  disabled={disabling}
+                  className="flex items-center gap-2 rounded-xl border border-red-200 bg-white px-4 py-2.5 text-[13px] font-medium text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
                 >
-                  {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+                  {disabling
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <ShieldOff className="h-3.5 w-3.5" />
+                  }
+                  Desactivar 2FA
                 </button>
               </div>
-            </div>
+            ) : step === "confirming" && enrollData ? (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <p className="text-[14px] font-semibold text-slate-900">Configura tu autenticador</p>
+                  <button type="button" onClick={() => { setStep("idle"); setEnrollData(null); }}
+                    className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 transition">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
 
-            {/* Verificar código */}
-            <form onSubmit={handleConfirmEnroll} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="enroll-code">
-                  Introduce el código de tu app para confirmar
-                </Label>
-                <Input
-                  id="enroll-code"
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="123456"
-                  autoComplete="one-time-code"
-                  maxLength={6}
-                  value={code}
-                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-                  required
-                />
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-900 text-[11px] font-bold text-white">1</span>
+                    <p className="text-[13px] font-medium text-slate-700">Escanea el código QR</p>
+                  </div>
+                  <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
+                    <div className="shrink-0 rounded-2xl border-4 border-slate-100 p-2 bg-white shadow-sm overflow-hidden w-[180px] h-[180px]">
+                      {/* eslint-disable-next-line @next/next/no-img-element -- data URL del QR de Supabase */}
+                      <img
+                        src={enrollData.qrCode}
+                        alt="Código QR 2FA"
+                        width={180}
+                        height={180}
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                    <div className="flex-1 space-y-3">
+                      <div className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50">
+                        <Smartphone className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                        <p className="text-[12px] text-slate-500">
+                          Abre <strong className="text-slate-700">Google Authenticator</strong> o <strong className="text-slate-700">Authy</strong> y escanea el código.
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-medium uppercase tracking-wider text-slate-400 mb-1.5">
+                          Clave manual
+                        </p>
+                        <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                          <code className={`flex-1 text-[12px] font-mono text-slate-700 break-all ${showSecret ? "" : "select-none tracking-widest"}`}>
+                            {showSecret ? enrollData.secret : "•".repeat(Math.min(enrollData.secret.length, 32))}
+                          </code>
+                          <button type="button" onClick={() => setShowSecret(!showSecret)}
+                            className="text-slate-400 hover:text-slate-600 transition shrink-0">
+                            {showSecret ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                          </button>
+                          <button type="button" onClick={copySecret}
+                            className="flex items-center gap-1 text-[11px] font-medium text-slate-500 hover:text-slate-800 transition shrink-0">
+                            {copied
+                              ? <><CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />Copiado</>
+                              : <><Copy className="h-3.5 w-3.5" />Copiar</>
+                            }
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3 border-t border-slate-100 pt-5">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-900 text-[11px] font-bold text-white">2</span>
+                    <p className="text-[13px] font-medium text-slate-700">Introduce el código de 6 dígitos (se verifica al completar)</p>
+                  </div>
+                  <OtpInput value={confirmCode} onChange={setConfirmCode} disabled={confirmLoading} />
+                  {confirmError && (
+                    <div className="flex items-start gap-2 rounded-xl border border-red-100 bg-red-50 px-3.5 py-2.5">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+                      <p className="text-[12px] text-red-700">{confirmError}</p>
+                    </div>
+                  )}
+                  {confirmLoading && (
+                    <p className="text-[12px] text-slate-500 flex items-center gap-2">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Verificando…
+                    </p>
+                  )}
+                </div>
               </div>
-
-              {error && (
-                <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">
-                  {error}
-                </p>
-              )}
-
-              <div className="flex gap-3">
-                <Button
-                  type="submit"
-                  disabled={working || code.length < 6}
-                  className="gap-2"
-                >
-                  <ShieldCheck className="h-4 w-4" />
-                  {working ? "Activando…" : "Confirmar y activar"}
-                </Button>
-                <Button
+            ) : step === "done" ? (
+              <div className="space-y-4">
+                <div className="flex flex-col items-center gap-3 py-2 text-center">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100">
+                    <ShieldCheck className="h-7 w-7 text-emerald-600" />
+                  </div>
+                  <p className="text-[16px] font-semibold text-slate-900">2FA activado</p>
+                  <p className="text-[13px] text-slate-500">
+                    En los próximos inicios de sesión se te pedirá un código de tu app autenticadora.
+                  </p>
+                </div>
+                <button
                   type="button"
-                  variant="outline"
-                  onClick={() => { setState("disabled"); setEnrollData(null); setCode(""); setError(""); }}
-                  disabled={working}
+                  onClick={() => { setStep("idle"); void loadStatus(); }}
+                  className="w-full rounded-xl bg-slate-900 py-2.5 text-[13px] font-semibold text-white hover:bg-slate-800"
                 >
-                  Cancelar
-                </Button>
+                  Entendido
+                </button>
               </div>
-            </form>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-[13px] text-slate-500">
+                  Protege tu cuenta con TOTP gestionado por Supabase Auth (sin secretos almacenados en servidores PayForce).
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void startEnroll()}
+                  disabled={step === "enrolling"}
+                  className="flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-[13px] font-semibold text-white hover:bg-slate-800 transition-colors disabled:opacity-60"
+                >
+                  {step === "enrolling"
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <ShieldCheck className="h-3.5 w-3.5" />
+                  }
+                  Activar 2FA
+                </button>
+              </div>
+            )}
           </div>
-        )}
+        </div>
 
-        {/* ENABLED — MFA activo */}
-        {state === "enabled" && (
-          <div className="space-y-4">
-            <div className="flex items-start gap-3 rounded-xl bg-emerald-50 border border-emerald-100 p-4">
-              <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" />
-              <div>
-                <p className="text-sm font-medium text-emerald-800">
-                  Verificación en dos pasos activada
-                </p>
-                <p className="mt-0.5 text-xs text-emerald-600">
-                  Tu cuenta está protegida con TOTP. Se te pedirá el código de tu app en cada inicio de sesión.
-                </p>
-              </div>
+        {!twoFAEnabled && step === "idle" && (
+          <div className="rounded-2xl border border-slate-200 bg-white px-6 py-5">
+            <p className="text-[13px] font-semibold text-slate-800 mb-3">Aplicaciones compatibles</p>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              {[
+                { name: "Google Authenticator", platform: "iOS / Android" },
+                { name: "Authy",                platform: "iOS / Android / Desktop" },
+                { name: "1Password",            platform: "Multiplataforma" },
+              ].map((app) => (
+                <div key={app.name} className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5">
+                  <p className="text-[12px] font-medium text-slate-800">{app.name}</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">{app.platform}</p>
+                </div>
+              ))}
             </div>
-            <Button
-              variant="outline"
-              onClick={handleUnenroll}
-              disabled={working}
-              className="gap-2 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
-            >
-              <ShieldOff className="h-4 w-4" />
-              {working ? "Desactivando…" : "Desactivar verificación en dos pasos"}
-            </Button>
           </div>
         )}
-      </section>
+      </div>
     </div>
   );
 }

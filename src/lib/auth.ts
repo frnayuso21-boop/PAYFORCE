@@ -46,11 +46,9 @@ export interface SessionData {
  * En el primer login, crea el registro local automáticamente (upsert).
  * Vincula cuentas conectadas huérfanas que tengan el mismo email.
  * Si no hay sesión válida, lanza AuthError(401).
+ * El segundo factor (MFA) lo gestiona Supabase Auth (AAL2) antes de llegar al dashboard.
  */
 export async function requireAuth(req: NextRequest): Promise<SessionData> {
-  // req no se usa directamente: las cookies las lee el server client internamente
-  void req;
-
   const supabase = await createSupabaseServerClient();
   const {
     data: { user: sbUser },

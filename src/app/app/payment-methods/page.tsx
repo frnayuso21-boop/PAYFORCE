@@ -21,7 +21,7 @@ const METHODS = [
     iconBg:   "bg-violet-100",
   },
   {
-    href:     "/app/virtual-terminal",
+    href:     "/dashboard/terminal",
     icon:     Phone,
     label:    "Cobro por teléfono (MOTO)",
     desc:     "Introduce los datos de la tarjeta del cliente en llamada para cobrar manualmente",

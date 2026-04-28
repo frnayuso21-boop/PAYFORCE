@@ -1,15 +1,13 @@
 /**
  * src/middleware.ts
  *
- * Edge Runtime — protección de rutas con Supabase Auth + MFA (TOTP).
+ * Edge Runtime — protección de rutas con Supabase Auth + MFA (AAL2) nativo.
  *
- * Responsabilidades:
  *   1. Refrescar el token JWT de Supabase en cada request.
- *   2. Proteger /app/* — redirige a /login sin sesión, a /verify sin aal2 si MFA está activo.
- *   3. /verify — accesible solo con sesión aal1; si ya aal2, redirige al destino.
- *   4. /login y /signup — redirige al dashboard (o /verify) si ya hay sesión.
- *   5. APIs sensibles — 401 sin sesión.
- *   6. Libre: /api/stripe/webhook, /checkout, /pay/*.
+ *   2. Proteger /app/* y /dashboard/* — sin sesión → /login; MFA pendiente → /login/2fa.
+ *   3. /login/2fa — solo con sesión y AAL1 cuando el siguiente nivel es AAL2.
+ *   4. /verify — redirección legacy a /login/2fa.
+ *   5. /login y /signup — con sesión completa → dashboard.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -30,12 +28,10 @@ export async function middleware(req: NextRequest) {
     !host.startsWith("www.");
   if (isSubdomain) {
     const slug = host.replace(`.${appHost}`, "");
-    // Reescritura interna — la URL del cliente no cambia
     return NextResponse.rewrite(new URL(`/store/${slug}${pathname}`, req.url));
   }
 
-  // ── Rutas públicas: salir sin crear cliente Supabase ni llamadas de red ───
-  // Estas rutas no tienen lógica de auth — ahorramos getUser() por completo.
+  // ── Rutas públicas ────────────────────────────────────────────────────────
   const isPublicPath =
     pathname === "/" ||
     pathname.startsWith("/home") ||
@@ -53,20 +49,14 @@ export async function middleware(req: NextRequest) {
 
   if (isPublicPath) return res;
 
-  // ── Bypass de desarrollo ─────────────────────────────────────────────────
-  // Activa con NEXT_PUBLIC_DEV_BYPASS=true en .env.local para saltarte auth en local.
-  // NUNCA pongas esto en producción.
-  if (
-    process.env.NODE_ENV !== "production" &&
-    process.env.NEXT_PUBLIC_DEV_BYPASS === "true"
-  ) {
+  if (process.env.NODE_ENV !== "production" &&
+      process.env.NEXT_PUBLIC_DEV_BYPASS === "true") {
     return res;
   }
 
   const supabaseUrl  = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  // Si Supabase no está configurado (desarrollo sin credenciales), pasar sin auth.
   if (
     !supabaseUrl ||
     supabaseUrl.includes("TU_PROYECTO") ||
@@ -76,7 +66,6 @@ export async function middleware(req: NextRequest) {
     return res;
   }
 
-  // ── Supabase: refrescar sesión JWT ────────────────────────────────────────
   const supabase = createServerClient(
     supabaseUrl,
     supabaseAnon,
@@ -96,11 +85,8 @@ export async function middleware(req: NextRequest) {
     },
   );
 
-  // getUser() valida el JWT contra Supabase (no confiar solo en cookie).
   const { data: { user } } = await supabase.auth.getUser();
 
-  // ── Helper: comprobar si necesita MFA (aal2) ─────────────────────────────
-  // Lee el AAL del JWT en local — sin llamada de red.
   async function needsMfa(): Promise<boolean> {
     const { data } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
     return (
@@ -110,58 +96,74 @@ export async function middleware(req: NextRequest) {
     );
   }
 
-  // ── 1. /admin/* ── solo acceso con sesión activa (role ADMIN se valida en layout) ──
+  // ── Legacy /verify → /login/2fa ──────────────────────────────────────────
+  if (pathname === "/verify") {
+    const url = req.nextUrl.clone();
+    url.pathname = "/login/2fa";
+    return NextResponse.redirect(url);
+  }
+
+  // ── /admin/* ─────────────────────────────────────────────────────────────
   if (pathname.startsWith("/admin")) {
     if (!user) return NextResponse.redirect(new URL("/login?from=/admin", req.url));
     return res;
   }
 
-  // ── 2. /app/* ─────────────────────────────────────────────────────────────
-  if (pathname.startsWith("/app/")) {
+  // ── /app/* y /dashboard/* ───────────────────────────────────────────────
+  const isProtectedApp =
+    pathname.startsWith("/app/") || pathname.startsWith("/dashboard");
+
+  if (isProtectedApp) {
     if (!user) {
       const url = req.nextUrl.clone();
       url.pathname = "/login";
       url.searchParams.set("from", pathname);
       return NextResponse.redirect(url);
     }
-    // Usuario autenticado en aal1 pero tiene MFA activo → pedir segundo factor
     if (await needsMfa()) {
       const url = req.nextUrl.clone();
-      url.pathname = "/verify";
+      url.pathname = "/login/2fa";
       url.searchParams.set("from", pathname);
       return NextResponse.redirect(url);
+    }
+    if (pathname.startsWith("/app/")) {
+      const requestHeaders = new Headers(req.headers);
+      requestHeaders.set("x-payforce-pathname", pathname);
+      const out = NextResponse.next({ request: { headers: requestHeaders } });
+      res.cookies.getAll().forEach((c) => {
+        out.cookies.set(c.name, c.value);
+      });
+      return out;
     }
     return res;
   }
 
-  // ── 2. /verify ────────────────────────────────────────────────────────────
-  if (pathname === "/verify") {
+  // ── /login/2fa — completar MFA ────────────────────────────────────────────
+  if (pathname === "/login/2fa") {
     if (!user) {
       return NextResponse.redirect(new URL("/login", req.url));
     }
-    // Si ya está en aal2, no necesita estar aquí
     if (!(await needsMfa())) {
       const from = req.nextUrl.searchParams.get("from") ?? "/app/dashboard";
-      // Evitar bucle si "from" es /verify
-      const dest = from.startsWith("/verify") ? "/app/dashboard" : from;
+      const dest = from.startsWith("/") ? from : "/app/dashboard";
       return NextResponse.redirect(new URL(dest, req.url));
     }
     return res;
   }
 
-  // ── 3. /login y /signup ───────────────────────────────────────────────────
+  // ── /login y /signup ─────────────────────────────────────────────────────
   if (pathname === "/login" || pathname === "/signup") {
     if (user) {
       if (await needsMfa()) {
-        return NextResponse.redirect(new URL("/verify", req.url));
+        return NextResponse.redirect(
+          new URL(`/login/2fa?from=${encodeURIComponent("/app/dashboard")}`, req.url),
+        );
       }
       return NextResponse.redirect(new URL("/app/dashboard", req.url));
     }
     return res;
   }
 
-  // ── 4. APIs sensibles → 401 sin sesión ───────────────────────────────────
-  // /api/stripe/webhook es PÚBLICO (verificación de firma propia).
   if (!user) {
     const protectedApis = [
       "/api/payments/refund",

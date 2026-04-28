@@ -8,6 +8,7 @@ import {
   getUserPrimaryAccount,
   AuthError,
 }                                     from "@/lib/auth";
+import { logAuthSecurityAudit }       from "@/lib/supabaseSecurityAudit";
 import { checkRateLimit }             from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -52,7 +53,8 @@ interface CreateLinkBody {
 
 export async function POST(req: NextRequest) {
   try {
-    const { user } = await requireAuth(req);
+    const session = await requireAuth(req);
+    const { user } = session;
 
     const rl = checkRateLimit(`payment-links-create:${user.id}`, { windowMs: 60_000, max: 20 });
     if (!rl.success) {
@@ -218,6 +220,11 @@ export async function POST(req: NextRequest) {
         },
       });
       const url = `${getBaseUrl(req)}/pay/${token}`;
+      await logAuthSecurityAudit(req, session, {
+        action:   "PAYMENT_LINK_CREATED",
+        resource: "payment_link",
+        metadata: { linkId: link.id, token, amount: link.amount, testMode: true },
+      });
       return NextResponse.json(
         {
           id: link.id, token, url,
@@ -276,6 +283,12 @@ export async function POST(req: NextRequest) {
     });
 
     const url = `${getBaseUrl(req)}/pay/${token}`;
+
+    await logAuthSecurityAudit(req, session, {
+      action:   "PAYMENT_LINK_CREATED",
+      resource: "payment_link",
+      metadata: { linkId: link.id, token, amount: link.amount },
+    });
 
     return NextResponse.json(
       { id: link.id, token, url, amount: link.amount, currency: link.currency, status: link.status, expiresAt: link.expiresAt, createdAt: link.createdAt },

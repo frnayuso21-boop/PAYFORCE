@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
         platformFee:     String(PLATFORM_FEE),
         customerName:    customerName ?? "",
       },
-      return_url: `${process.env.NEXT_PUBLIC_APP_URL}/app/virtual-terminal?status=success`,
+      return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/terminal?status=success`,
     });
 
     if (pi.status === "succeeded") {

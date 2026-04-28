@@ -4,7 +4,7 @@ import { BottomNav }     from "@/components/mobile/BottomNav";
 import { FloatingButton } from "@/components/mobile/FloatingButton";
 import { BrandProvider } from "@/context/BrandContext";
 
-export default function AppLayout({ children }: { children: React.ReactNode }) {
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <BrandProvider>
       {/* ── DESKTOP (md+): layout con sidebar lateral ──────────────────────── */}

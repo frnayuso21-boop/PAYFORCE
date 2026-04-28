@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 
 const actions = [
   { label: "Cobro con QR",        description: "Genera un QR para cobrar",       href: "/app/payment-methods/qr", icon: Smartphone, highlight: true  },
-  { label: "Cobro por teléfono",  description: "Introduce datos de tarjeta",      href: "/app/virtual-terminal",  icon: Phone,      highlight: false },
+  { label: "Cobro por teléfono",  description: "Introduce datos de tarjeta",      href: "/dashboard/terminal",    icon: Phone,      highlight: false },
   { label: "Escanear código",     description: "Cobra por código de barras / QR", href: "/app/barcode",           icon: ScanLine,   highlight: false },
   { label: "Suscripción",         description: "Cobro recurrente automático",      href: "/app/subscriptions",     icon: RefreshCw,  highlight: false },
   { label: "Crear enlace de pago",description: "Comparte un link para cobrar",    href: "/app/payment-links",     icon: Link2,      highlight: false },

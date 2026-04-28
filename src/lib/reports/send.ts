@@ -2,7 +2,12 @@ import { Resend } from "resend";
 import type { Manager } from "@prisma/client";
 import type { ReportData } from "./generate";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+function getResend() {
+  if (!process.env.RESEND_API_KEY) {
+    throw new Error("RESEND_API_KEY no está configurada. Añádela a las variables de entorno.");
+  }
+  return new Resend(process.env.RESEND_API_KEY);
+}
 
 const FROM_EMAIL = "informes@payforce.co";
 
@@ -133,7 +138,7 @@ export async function sendReport(manager: Manager, report: ReportData): Promise<
 
   const html = buildHtml(manager, report);
 
-  const { error } = await resend.emails.send({
+  const { error } = await getResend().emails.send({
     from: FROM_EMAIL,
     to: manager.email,
     subject: `Informe semanal PayForce — semana del ${report.period.label}`,

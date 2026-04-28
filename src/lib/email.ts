@@ -1,8 +1,14 @@
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM   = process.env.EMAIL_FROM ?? "PayForce <cobros@payforce.app>";
-const APP    = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+const FROM = process.env.EMAIL_FROM ?? "PayForce <cobros@payforce.app>";
+const APP  = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+
+function getResend() {
+  if (!process.env.RESEND_API_KEY) {
+    throw new Error("RESEND_API_KEY no está configurada.");
+  }
+  return new Resend(process.env.RESEND_API_KEY);
+}
 
 // ─── Email: invitación para guardar tarjeta ───────────────────────────────────
 export async function sendCardInvitationEmail(opts: {
@@ -56,7 +62,7 @@ export async function sendCardInvitationEmail(opts: {
 </body>
 </html>`;
 
-  const { error } = await resend.emails.send({
+  const { error } = await getResend().emails.send({
     from:    FROM,
     to:      [to],
     subject: `${businessName} — Añade tu tarjeta para gestionar tus recibos`,

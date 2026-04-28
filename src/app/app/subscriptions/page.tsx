@@ -3,6 +3,7 @@
 import React, {
   useState, useEffect, useRef, useCallback,
 } from "react";
+import { MotoAddCardModal } from "@/components/subscriptions/MotoAddCardModal";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 interface SubscriptionCustomer {
@@ -106,6 +107,7 @@ function TabCustomers() {
   const [creating,   setCreating]   = useState(false);
   const [createErr,  setCreateErr]  = useState<string | null>(null);
   const [toast,      setToast]      = useState<string | null>(null);
+  const [motoFor,    setMotoFor]    = useState<SubscriptionCustomer | null>(null);
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
 
@@ -198,6 +200,16 @@ function TabCustomers() {
 
   return (
     <div>
+      {motoFor && (
+        <MotoAddCardModal
+          customer={{ id: motoFor.id, name: motoFor.name, email: motoFor.email }}
+          onClose={() => setMotoFor(null)}
+          onSaved={() => {
+            load();
+            showToast("Tarjeta guardada (MOTO)");
+          }}
+        />
+      )}
       {toast && <div style={s.toast}>{toast}</div>}
 
       {/* Contadores */}
@@ -234,7 +246,7 @@ function TabCustomers() {
           <table style={s.table}>
             <thead>
               <tr>
-                {["Nombre", "Email", "Referencia", "Importe", "Último cobro", "Estado", ""].map(h => (
+                {["Nombre", "Email", "Referencia", "Importe", "Último cobro", "Estado", "Acciones"].map(h => (
                   <th key={h} style={s.th}>{h}</th>
                 ))}
               </tr>
@@ -261,12 +273,21 @@ function TabCustomers() {
                         {cfg.label}
                       </span>
                     </td>
-                    <td style={s.td}>
-                      {c.status === "PENDING_CARD" && (
-                        <button style={s.btnXS} onClick={() => invite(c.id)} disabled={inviting === c.id}>
-                          {inviting === c.id ? "Enviando..." : "Invitar"}
+                    <td style={{ ...s.td, whiteSpace: "nowrap" }}>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                        <button
+                          type="button"
+                          style={s.btnMoto}
+                          onClick={() => setMotoFor(c)}
+                        >
+                          Añadir tarjeta manualmente
                         </button>
-                      )}
+                        {c.status === "PENDING_CARD" && (
+                          <button style={s.btnXS} onClick={() => invite(c.id)} disabled={inviting === c.id}>
+                            {inviting === c.id ? "Enviando..." : "Invitar"}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -1171,6 +1192,7 @@ const s: Record<string, React.CSSProperties> = {
   btnPrimary: { padding: "10px 18px", background: "#000", color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, cursor: "pointer", fontSize: 14, whiteSpace: "nowrap" },
   btnSecondary:{ padding: "10px 18px", background: "#fff", color: "#000", border: "1.5px solid #000", borderRadius: 8, fontWeight: 600, cursor: "pointer", fontSize: 14, whiteSpace: "nowrap" },
   btnGhost:   { padding: "10px 18px", background: "transparent", color: "#888", border: "1px solid #E5E7EB", borderRadius: 8, fontWeight: 500, cursor: "pointer", fontSize: 14 },
+  btnMoto:    { padding: "6px 12px", background: "#1D4ED8", color: "#fff", border: "none", borderRadius: 6, fontWeight: 600, cursor: "pointer", fontSize: 12 },
   btnXS:      { padding: "5px 12px", background: "#000", color: "#fff", border: "none", borderRadius: 6, fontWeight: 600, cursor: "pointer", fontSize: 12 },
   dropzone:   { border: "2px dashed", borderRadius: 16, padding: "60px 32px", textAlign: "center", cursor: "pointer", transition: "all 0.15s", marginBottom: 20 },
   summaryBox: { background: "#F8F8FA", border: "1px solid #E5E7EB", borderRadius: 16, padding: "20px 24px", marginBottom: 20 },

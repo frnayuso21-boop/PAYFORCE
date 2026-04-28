@@ -9,7 +9,7 @@ import {
   ChevronDown, ChevronRight, LogOut, Settings, User, ShieldCheck,
   Package, Cpu, QrCode, Barcode, Phone, Smartphone,
   BarChart2, Receipt, FileText, Scale, Database,
-  CreditCard, Layers, Code2, Zap, UserCog,
+  CreditCard, Layers, Code2, Zap, UserCog, Shield, ClipboardList,
 } from "lucide-react";
 import { cn }       from "@/lib/utils";
 import { useBrand } from "@/context/BrandContext";
@@ -79,7 +79,7 @@ const NAV_SECTIONS: NavSection[] = [
         children: [
           { label: "QR",                href: "/app/payment-methods/qr" },
           { label: "Código de Barras",  href: "/app/barcode"            },
-          { label: "Cobro por teléfono",href: "/app/virtual-terminal"   },
+          { label: "Cobro por teléfono",href: "/dashboard/terminal"   },
         ],
       },
     ],
@@ -126,6 +126,20 @@ const NAV_SECTIONS: NavSection[] = [
       },
       { label: "Impuestos",       href: "/app/taxes",          icon: Scale      },
       { label: "Gestión de datos",href: "/app/data-management",icon: Database   },
+    ],
+  },
+  {
+    title: "SEGURIDAD",
+    items: [
+      {
+        label: "Seguridad",
+        href:  "/app/settings/security",
+        icon:  Shield,
+        children: [
+          { label: "2FA",           href: "/app/settings/security"   },
+          { label: "Log de accesos",href: "/app/settings/audit-log"  },
+        ],
+      },
     ],
   },
 ];
