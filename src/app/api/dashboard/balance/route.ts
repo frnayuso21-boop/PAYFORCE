@@ -72,19 +72,25 @@ export async function GET(req: NextRequest) {
       }));
     }
 
-    // Total cobrado este mes (siempre desde BD)
+    // Volumen bruto, neto y mensual (siempre desde BD)
     const now        = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const agg = await db.merchantSplit.aggregate({
-      where: {
-        connectedAccountId: account.id,
-        createdAt: { gte: monthStart },
-      },
-      _sum: { totalAmount: true },
-    });
-    const thisMonth = agg._sum.totalAmount ?? 0;
+    const [aggMonth, aggAll] = await Promise.all([
+      db.merchantSplit.aggregate({
+        where: { connectedAccountId: account.id, createdAt: { gte: monthStart } },
+        _sum:  { totalAmount: true, amountToPayMerchant: true, platformFee: true },
+      }),
+      db.merchantSplit.aggregate({
+        where: { connectedAccountId: account.id },
+        _sum:  { totalAmount: true, amountToPayMerchant: true, platformFee: true },
+      }),
+    ]);
+    const thisMonth   = aggMonth._sum.totalAmount          ?? 0;
+    const grossVolume = aggAll._sum.totalAmount             ?? 0;
+    const netVolume   = aggAll._sum.amountToPayMerchant     ?? 0;
+    const totalFees   = aggAll._sum.platformFee             ?? 0;
 
-    return NextResponse.json({ available, pending, thisMonth, transfers, currency: "eur" }, {
+    return NextResponse.json({ available, pending, thisMonth, grossVolume, netVolume, totalFees, transfers, currency: "eur" }, {
       headers: { "Cache-Control": "private, max-age=30, stale-while-revalidate=60" },
     });
   } catch (err) {
