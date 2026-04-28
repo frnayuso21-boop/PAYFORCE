@@ -18,7 +18,7 @@ const LOCKOUT_MINUTES  = 15;
  */
 export async function POST(req: NextRequest) {
   try {
-    const { user }    = await requireAuth(req, { skipPayforce2faGate: true });
+    const { user }    = await requireAuth(req);
     const { failed }  = await req.json() as { failed: boolean };
     const ip          = getIp(req);
 
