@@ -6,9 +6,9 @@ export const runtime = "nodejs";
 
 // POST /api/notifications/subscribe — guardar o actualizar suscripción push
 export async function POST(req: NextRequest) {
-  let user;
+  let user: Awaited<ReturnType<typeof requireAuth>>["user"];
   try {
-    user = await requireAuth(req);
+    ({ user } = await requireAuth(req));
   } catch {
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });
   }
@@ -44,9 +44,9 @@ export async function POST(req: NextRequest) {
 
 // DELETE /api/notifications/subscribe — eliminar suscripción push
 export async function DELETE(req: NextRequest) {
-  let user;
+  let user: Awaited<ReturnType<typeof requireAuth>>["user"];
   try {
-    user = await requireAuth(req);
+    ({ user } = await requireAuth(req));
   } catch {
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });
   }
