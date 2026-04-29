@@ -103,7 +103,8 @@ const NAV_SECTIONS: NavSection[] = [
         children: [
           { label: "QR",                href: "/app/payment-methods/qr" },
           { label: "Código de Barras",  href: "/app/barcode"            },
-          { label: "Cobro por teléfono",href: "/dashboard/terminal"   },
+          { label: "Cobro por teléfono",href: "/dashboard/terminal"      },
+          { label: "Cobro QR",          href: "/dashboard/terminal/qr" },
         ],
       },
     ],
