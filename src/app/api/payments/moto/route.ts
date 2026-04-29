@@ -40,7 +40,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const PLATFORM_FEE = Math.round(amount * 0.04) + 40;
+    const { calculateFee } = await import("@/lib/fees");
+    const PLATFORM_FEE = calculateFee(amount, "card");
     if (amount - PLATFORM_FEE <= 0) {
       return NextResponse.json({ error: "Importe demasiado bajo para cubrir la comisión." }, { status: 400 });
     }

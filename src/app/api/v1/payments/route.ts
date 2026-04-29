@@ -79,9 +79,8 @@ export async function POST(req: NextRequest) {
       return apiError(422, "account_not_ready", "Cuenta Stripe no configurada.");
     }
 
-    const FEE_PERCENT   = 0.04;
-    const FEE_FIXED     = 40; // 0,40€ in cents
-    const applicationFeeAmount = Math.round(amount * FEE_PERCENT) + FEE_FIXED;
+    const { calculateFee } = await import("@/lib/fees");
+    const applicationFeeAmount = calculateFee(amount);
 
     const pi = await stripe.paymentIntents.create({
       amount,

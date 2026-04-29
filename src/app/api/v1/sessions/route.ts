@@ -35,9 +35,8 @@ export const dynamic = "force-dynamic";
 const VALID_CURRENCIES = new Set([
   "eur","usd","gbp","chf","sek","nok","dkk","pln","czk","huf","ron","bgn",
 ]);
-const PLATFORM_FEE_PCT  = 0.04;
-const PLATFORM_FEE_FLAT = 40;
-const calcFee = (amount: number) => Math.round(amount * PLATFORM_FEE_PCT) + PLATFORM_FEE_FLAT;
+import { calculateFee } from "@/lib/fees";
+const calcFee = (amount: number) => calculateFee(amount);
 
 function getAppUrl(req: NextRequest): string {
   const env = process.env.NEXT_PUBLIC_APP_URL;

@@ -29,12 +29,10 @@ const VALID_CURRENCIES = new Set([
   "eur","usd","gbp","chf","sek","nok","dkk","pln","czk","huf","ron","bgn",
 ]);
 
-// Fee unificado: 4% + 40 cts
-const PLATFORM_FEE_PCT  = 0.04;
-const PLATFORM_FEE_FLAT = 40;
+import { calculateFee } from "@/lib/fees";
 
 function calcPlatformFee(amount: number): number {
-  return Math.round(amount * PLATFORM_FEE_PCT) + PLATFORM_FEE_FLAT;
+  return calculateFee(amount);
 }
 
 // ─── POST /api/payment-links ──────────────────────────────────────────────────

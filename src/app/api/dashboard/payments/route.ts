@@ -50,22 +50,25 @@ export async function GET(req: NextRequest) {
         const fee = c.application_fee_amount ?? 0;
         const net = c.amount_captured - fee;
         return {
-          id:             c.id,
-          amount:         c.amount,
-          amountCaptured: c.amount_captured,
-          amountRefunded: c.amount_refunded,
-          currency:       c.currency,
-          status:         c.refunded ? "refunded" : c.status,
-          description:    c.description ?? null,
-          customerEmail:  c.billing_details?.email ?? null,
-          customerName:   c.billing_details?.name  ?? null,
-          created:        c.created,
+          id:                c.id,
+          amount:            c.amount,
+          amountCaptured:    c.amount_captured,
+          amountRefunded:    c.amount_refunded,
+          currency:          c.currency,
+          status:            c.refunded ? "refunded" : c.status,
+          description:       c.description ?? null,
+          customerEmail:     c.billing_details?.email ?? null,
+          customerName:      c.billing_details?.name  ?? null,
+          created:           c.created,
           fee,
           net,
-          refunded:       c.refunded,
-          paymentIntentId: typeof c.payment_intent === "string"
+          refunded:          c.refunded,
+          paymentIntentId:   typeof c.payment_intent === "string"
             ? c.payment_intent
             : (c.payment_intent?.id ?? null),
+          paymentMethodType: c.payment_method_details?.type ?? null,
+          cardBrand:         c.payment_method_details?.card?.brand ?? null,
+          cardCountry:       c.payment_method_details?.card?.country ?? null,
           source: "stripe" as const,
         };
       });
@@ -77,23 +80,30 @@ export async function GET(req: NextRequest) {
           if (p.stripePaymentIntentId && piIds.has(p.stripePaymentIntentId)) return false;
           return true;
         })
-        .map((p) => ({
-          id:             p.stripeChargeId ?? p.id,
-          amount:         p.amount,
-          amountCaptured: p.amount,
-          amountRefunded: p.refundedAmount ?? 0,
-          currency:       p.currency,
-          status:         (p.refundedAmount ?? 0) > 0 ? "refunded" : p.status.toLowerCase(),
-          description:    p.description ?? null,
-          customerEmail:  p.customerEmail ?? null,
-          customerName:   p.customerName  ?? null,
-          created:        Math.floor(new Date(p.createdAt).getTime() / 1000),
-          fee:            p.applicationFeeAmount ?? 0,
-          net:            p.amount - (p.applicationFeeAmount ?? 0),
-          refunded:       (p.refundedAmount ?? 0) > 0,
-          paymentIntentId: p.stripePaymentIntentId ?? null,
-          source: "db" as const,
-        }));
+        .map((p) => {
+          let meta: Record<string, string> = {};
+          try { if (p.metadata) meta = JSON.parse(p.metadata) as Record<string, string>; } catch { /* ignore */ }
+          return {
+            id:                p.stripeChargeId ?? p.id,
+            amount:            p.amount,
+            amountCaptured:    p.amount,
+            amountRefunded:    p.refundedAmount ?? 0,
+            currency:          p.currency,
+            status:            (p.refundedAmount ?? 0) > 0 ? "refunded" : p.status.toLowerCase(),
+            description:       p.description ?? null,
+            customerEmail:     p.customerEmail ?? null,
+            customerName:      p.customerName  ?? null,
+            created:           Math.floor(new Date(p.createdAt).getTime() / 1000),
+            fee:               p.applicationFeeAmount ?? 0,
+            net:               p.amount - (p.applicationFeeAmount ?? 0),
+            refunded:          (p.refundedAmount ?? 0) > 0,
+            paymentIntentId:   p.stripePaymentIntentId ?? null,
+            paymentMethodType: meta.paymentMethodType ?? null,
+            cardBrand:         null,
+            cardCountry:       meta.cardCountry ?? null,
+            source: "db" as const,
+          };
+        });
 
       // Unión ordenada por fecha desc
       const merged = [...fromStripe, ...fromDb].sort((a, b) => b.created - a.created);
@@ -128,22 +138,29 @@ export async function GET(req: NextRequest) {
       take:    limit,
     });
 
-    const payments = dbPayments.map((p) => ({
-      id:          p.id,
-      amount:      p.amount,
-      amountCaptured: p.amount,
-      amountRefunded: p.refundedAmount ?? 0,
-      currency:    p.currency,
-      status:      p.refundedAmount && p.refundedAmount > 0 ? "refunded" : p.status.toLowerCase(),
-      description: p.description ?? null,
-      customerEmail: p.customerEmail ?? null,
-      customerName:  p.customerName  ?? null,
-      created:     Math.floor(new Date(p.createdAt).getTime() / 1000),
-      fee:         p.applicationFeeAmount ?? 0,
-      net:         p.amount - (p.applicationFeeAmount ?? 0),
-      refunded:    (p.refundedAmount ?? 0) > 0,
-      paymentIntentId: p.stripePaymentIntentId ?? null,
-    }));
+    const payments = dbPayments.map((p) => {
+      let meta: Record<string, string> = {};
+      try { if (p.metadata) meta = JSON.parse(p.metadata) as Record<string, string>; } catch { /* ignore */ }
+      return {
+        id:                p.id,
+        amount:            p.amount,
+        amountCaptured:    p.amount,
+        amountRefunded:    p.refundedAmount ?? 0,
+        currency:          p.currency,
+        status:            p.refundedAmount && p.refundedAmount > 0 ? "refunded" : p.status.toLowerCase(),
+        description:       p.description ?? null,
+        customerEmail:     p.customerEmail ?? null,
+        customerName:      p.customerName  ?? null,
+        created:           Math.floor(new Date(p.createdAt).getTime() / 1000),
+        fee:               p.applicationFeeAmount ?? 0,
+        net:               p.amount - (p.applicationFeeAmount ?? 0),
+        refunded:          (p.refundedAmount ?? 0) > 0,
+        paymentIntentId:   p.stripePaymentIntentId ?? null,
+        paymentMethodType: meta.paymentMethodType ?? null,
+        cardBrand:         null,
+        cardCountry:       meta.cardCountry ?? null,
+      };
+    });
 
     return NextResponse.json({ payments, hasMore: false, nextCursor: null }, {
       headers: { "Cache-Control": "private, s-maxage=30, stale-while-revalidate=60" },

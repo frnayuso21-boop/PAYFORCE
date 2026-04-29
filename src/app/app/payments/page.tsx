@@ -4,26 +4,29 @@ import { mutate as swrMutate } from "swr";
 import { usePayments } from "@/hooks/useDashboard";
 import Link from "next/link";
 import {
-  CreditCard, RefreshCw, Search, ArrowUpRight,
+  CreditCard, RefreshCw, Search,
   CheckCircle2, XCircle, Clock, RotateCcw, ChevronRight,
-  X, AlertTriangle, Loader2,
+  X, AlertTriangle, Loader2, Smartphone, Wallet,
 } from "lucide-react";
 
 // ── Tipos ──────────────────────────────────────────────────────────────────────
 type Payment = {
-  id:             string;
-  amount:         number;
-  amountRefunded: number;
-  currency:       string;
-  status:         string;
-  description:    string | null;
-  customerEmail:  string | null;
-  customerName:   string | null;
-  created:        number;
-  fee:            number;
-  net:            number;
-  refunded:       boolean;
-  paymentIntentId: string | null;
+  id:                string;
+  amount:            number;
+  amountRefunded:    number;
+  currency:          string;
+  status:            string;
+  description:       string | null;
+  customerEmail:     string | null;
+  customerName:      string | null;
+  created:           number;
+  fee:               number;
+  net:               number;
+  refunded:          boolean;
+  paymentIntentId:   string | null;
+  paymentMethodType: string | null;
+  cardBrand:         string | null;
+  cardCountry:       string | null;
 };
 
 type FilterKey = "all" | "succeeded" | "failed" | "refunded";
@@ -45,6 +48,34 @@ function fmtTime(ts: number) {
   return new Date(ts * 1000).toLocaleTimeString("es-ES", {
     hour: "2-digit", minute: "2-digit",
   });
+}
+
+// ── Payment Method Badge ───────────────────────────────────────────────────────
+const PM_CONFIG: Record<string, { label: string; icon: React.ReactNode; bg: string; text: string }> = {
+  card:       { label: "Tarjeta",    icon: <CreditCard className="h-3 w-3" />,  bg: "#F1F5F9", text: "#475569" },
+  bizum:      { label: "Bizum",      icon: <Smartphone className="h-3 w-3" />,  bg: "#EEF2FF", text: "#4338CA" },
+  apple_pay:  { label: "Apple Pay",  icon: <Wallet className="h-3 w-3" />,      bg: "#F1F5F9", text: "#1e293b" },
+  google_pay: { label: "Google Pay", icon: <Wallet className="h-3 w-3" />,      bg: "#F0FDF4", text: "#166534" },
+  klarna:     { label: "Klarna",     icon: <Wallet className="h-3 w-3" />,      bg: "#FDF4FF", text: "#7C3AED" },
+  sepa_debit: { label: "SEPA",       icon: <CreditCard className="h-3 w-3" />,  bg: "#FFFBEB", text: "#92400E" },
+};
+
+function PaymentMethodBadge({ type, brand }: { type?: string | null; brand?: string | null }) {
+  if (!type) return <span className="text-[11px] text-slate-300">—</span>;
+
+  const label = brand && type === "card"
+    ? brand.charAt(0).toUpperCase() + brand.slice(1)
+    : (PM_CONFIG[type]?.label ?? type);
+  const cfg = PM_CONFIG[type] ?? { icon: <CreditCard className="h-3 w-3" />, bg: "#F1F5F9", text: "#475569" };
+
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+      style={{ backgroundColor: cfg.bg, color: cfg.text }}
+    >
+      {cfg.icon}{label}
+    </span>
+  );
 }
 
 // ── Status Badge ───────────────────────────────────────────────────────────────
@@ -283,9 +314,10 @@ export default function PaymentsPage() {
       <div className="rounded-lg border overflow-hidden" style={{ borderColor: "#E5E7EB" }}>
         {/* Cabecera */}
         <div className="grid bg-slate-50 border-b text-[11px] font-semibold text-slate-400 uppercase tracking-wide px-5 py-3"
-          style={{ borderColor: "#E5E7EB", gridTemplateColumns: "1.6fr 1fr 2fr 1.5fr 1.2fr 1fr 1fr 100px 24px" }}>
+          style={{ borderColor: "#E5E7EB", gridTemplateColumns: "1.4fr 0.9fr 0.9fr 1.8fr 1.3fr 1.1fr 0.9fr 0.9fr 100px 24px" }}>
           <span>Importe</span>
           <span>Estado</span>
+          <span>Método</span>
           <span>Descripción</span>
           <span>Cliente</span>
           <span>Fecha</span>
@@ -301,10 +333,11 @@ export default function PaymentsPage() {
               <div
                 key={i}
                 className="grid items-center px-5 py-3.5"
-                style={{ gridTemplateColumns: "1.6fr 1fr 2fr 1.5fr 1.2fr 1fr 1fr 100px 24px" }}
+                style={{ gridTemplateColumns: "1.4fr 0.9fr 0.9fr 1.8fr 1.3fr 1.1fr 0.9fr 0.9fr 100px 24px" }}
               >
                 <div className="h-4 w-20 animate-pulse rounded-md bg-slate-100" />
                 <div className="h-5 w-16 animate-pulse rounded-full bg-slate-100" />
+                <div className="h-5 w-14 animate-pulse rounded-full bg-slate-100" />
                 <div className="h-3.5 w-32 animate-pulse rounded bg-slate-100" />
                 <div className="space-y-1.5">
                   <div className="h-3 w-24 animate-pulse rounded bg-slate-100" />
@@ -332,7 +365,7 @@ export default function PaymentsPage() {
               <div
                 key={p.id}
                 className="grid items-center px-5 py-3.5 hover:bg-slate-50 transition group"
-                style={{ gridTemplateColumns: "1.6fr 1fr 2fr 1.5fr 1.2fr 1fr 1fr 100px 24px" }}
+                style={{ gridTemplateColumns: "1.4fr 0.9fr 0.9fr 1.8fr 1.3fr 1.1fr 0.9fr 0.9fr 100px 24px" }}
               >
                 {/* Importe */}
                 <Link href={`/app/payments/${p.id}`} className="contents">
@@ -351,6 +384,11 @@ export default function PaymentsPage() {
                 {/* Estado */}
                 <Link href={`/app/payments/${p.id}`} className="contents">
                   <StatusBadge status={p.status} />
+                </Link>
+
+                {/* Método de pago */}
+                <Link href={`/app/payments/${p.id}`} className="contents">
+                  <PaymentMethodBadge type={p.paymentMethodType} brand={p.cardBrand} />
                 </Link>
 
                 {/* Descripción */}

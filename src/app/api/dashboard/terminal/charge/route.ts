@@ -11,8 +11,7 @@ import { requireAuth, getUserPrimaryAccount, AuthError } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-const PLATFORM_FEE_PCT  = 0.04;
-const PLATFORM_FEE_FLAT = 40;
+import { calculateFee } from "@/lib/fees";
 
 export async function POST(req: NextRequest) {
   try {
@@ -51,7 +50,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const PLATFORM_FEE = Math.round(amount * PLATFORM_FEE_PCT) + PLATFORM_FEE_FLAT;
+    const PLATFORM_FEE = calculateFee(amount, "card");
     if (amount - PLATFORM_FEE <= 0) {
       return NextResponse.json({ error: "Importe demasiado bajo para cubrir la comisión." }, { status: 400 });
     }

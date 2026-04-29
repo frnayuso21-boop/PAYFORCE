@@ -106,7 +106,8 @@ export async function POST(req: NextRequest) {
           return { ok: false, rec, reason: "No payment method on file" };
         }
 
-        const fee = Math.round(rec.amount * 0.029) + 30;
+        const { calculateFee } = await import("@/lib/fees");
+        const fee = calculateFee(rec.amount, "card");
 
         const pi = await stripe.paymentIntents.create({
           amount:                 rec.amount,

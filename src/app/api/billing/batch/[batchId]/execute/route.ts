@@ -71,7 +71,8 @@ export async function POST(
       continue;
     }
 
-    const fee = Math.round(result.amount * 0.029) + 30; // 2.9% + 30 céntimos
+    const { calculateFee } = await import("@/lib/fees");
+    const fee = calculateFee(result.amount, "card");
 
     try {
       const pi = await stripe.paymentIntents.create({

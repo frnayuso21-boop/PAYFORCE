@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { resolveConnectStatus } from "@/lib/connect";
 import { sendPaymentReceiptEmail } from "@/lib/email";
 import { sendPushToUser } from "@/lib/webpush";
+import { calculateFee } from "@/lib/fees";
 
 export const runtime = "nodejs";
 
@@ -153,11 +154,6 @@ async function handlePaymentSucceeded(pi: Stripe.PaymentIntent, eventId: string,
     pi.metadata?.stripeAccountId ??
     null;
 
-  const platformFee = pi.application_fee_amount ?? (
-    pi.metadata?.platformFee ? parseInt(pi.metadata.platformFee, 10) : 0
-  );
-  const netAmount = pi.amount - platformFee;
-
   if (!stripeAccountId) {
     log.warn("payment.succeeded.no_destination", {
       eventId, paymentIntentId: pi.id,
@@ -172,11 +168,38 @@ async function handlePaymentSucceeded(pi: Stripe.PaymentIntent, eventId: string,
     return;
   }
 
+  // Recuperar el charge para obtener payment_method_details reales
+  let paymentMethodType: string | null = null;
+  let cardCountry: string | null = null;
+  const chargeId = typeof pi.latest_charge === "string" ? pi.latest_charge : null;
+  if (chargeId) {
+    try {
+      const charge = await stripe.charges.retrieve(chargeId, { stripeAccount: stripeAccountId });
+      paymentMethodType = charge.payment_method_details?.type ?? null;
+      cardCountry       = charge.payment_method_details?.card?.country ?? null;
+    } catch (err) {
+      log.warn("payment.succeeded.charge_fetch_failed", { eventId, chargeId, error: String(err) });
+    }
+  }
+
+  // Comisión real según método de pago y país de la tarjeta
+  const platformFee = calculateFee(pi.amount, paymentMethodType, cardCountry);
+  const netAmount   = pi.amount - platformFee;
+
+  // Metadatos enriquecidos con método de pago y comisión real
+  const existingMeta: Record<string, string> = {};
+  try {
+    if (pi.metadata) Object.assign(existingMeta, pi.metadata);
+  } catch { /* ignore */ }
+  if (paymentMethodType) existingMeta.paymentMethodType = paymentMethodType;
+  if (cardCountry)       existingMeta.cardCountry       = cardCountry;
+  existingMeta.platformFee = String(platformFee);
+
   const payment = await db.payment.upsert({
     where:  { stripePaymentIntentId: pi.id },
     create: {
       stripePaymentIntentId: pi.id,
-      stripeChargeId:        typeof pi.latest_charge === "string" ? pi.latest_charge : null,
+      stripeChargeId:        chargeId,
       connectedAccountId:    account.id,
       amount:                pi.amount,
       currency:              pi.currency,
@@ -184,15 +207,16 @@ async function handlePaymentSucceeded(pi: Stripe.PaymentIntent, eventId: string,
       netAmount,
       status:                "SUCCEEDED",
       description:           pi.description ?? null,
-      metadata:              Object.keys(pi.metadata ?? {}).length ? JSON.stringify(pi.metadata) : null,
+      metadata:              JSON.stringify(existingMeta),
       stripeCreatedAt:       new Date(pi.created * 1000),
       capturedAt:            new Date(),
     },
     update: {
       status:               "SUCCEEDED",
-      stripeChargeId:       typeof pi.latest_charge === "string" ? pi.latest_charge : null,
+      stripeChargeId:       chargeId,
       applicationFeeAmount: platformFee,
       netAmount,
+      metadata:             JSON.stringify(existingMeta),
       capturedAt:           new Date(),
     },
   });

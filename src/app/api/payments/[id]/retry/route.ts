@@ -10,11 +10,10 @@ export const dynamic = "force-dynamic";
 
 // ─── Constantes ────────────────────────────────────────────────────────────────
 
-const PLATFORM_FEE_PCT  = 0.04;
-const PLATFORM_FEE_FLAT = 40;
+import { calculateFee } from "@/lib/fees";
 
 function calcPlatformFee(amount: number) {
-  return Math.round(amount * PLATFORM_FEE_PCT) + PLATFORM_FEE_FLAT;
+  return calculateFee(amount);
 }
 
 function getBaseUrl(req: NextRequest): string {
