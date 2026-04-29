@@ -144,6 +144,7 @@ model ConnectedAccount {
   slug             String? @unique   // "mi-negocio" → mi-negocio.payforce.io
   storeDescription String?           // Descripción pública de la tienda
   primaryColor     String?           // Color principal hex, p.ej. "#6366f1"
+  logoUrl          String?           // Logo del merchant para checkout y facturas
   storeEnabled         Boolean @default(false)
   statementDescriptor  String? @default("")
 

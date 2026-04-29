@@ -1,9 +1,7 @@
 import type { Metadata }       from "next";
-import Link                   from "next/link";
 import { notFound }           from "next/navigation";
 import {
-  CheckCircle2, Clock, XCircle, AlertTriangle,
-  Shield, Lock, CreditCard, FileText,
+  CheckCircle2, Clock, XCircle, AlertTriangle, Lock,
 } from "lucide-react";
 import { db }                  from "@/lib/db";
 import { stripe }              from "@/lib/stripe";
@@ -13,6 +11,7 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { HexLogo }             from "@/components/icons/HexLogo";
 import Image                   from "next/image";
 import { PaySuccess }          from "./PaySuccess";
+import { calculateFee }        from "@/lib/fees";
 
 export const dynamic = "force-dynamic";
 
@@ -208,7 +207,7 @@ export default async function PayPage({ params, searchParams }: Props) {
     where:   { token },
     include: {
       connectedAccount: {
-        select: { businessName: true, email: true },
+        select: { businessName: true, email: true, primaryColor: true, logoUrl: true },
       },
     },
   });
@@ -231,17 +230,26 @@ export default async function PayPage({ params, searchParams }: Props) {
   }
 
   const businessName    = link.connectedAccount?.businessName || "PayForce";
-  const merchantLogoUrl = null; // activar tras ejecutar: npx prisma generate
+  const primaryColor    = link.connectedAccount?.primaryColor ?? null;
+  const merchantLogoUrl = link.connectedAccount?.logoUrl      ?? null;
 
   if (isPaid) {
-    // Busca el Payment interno para el botón de factura
     let internalPaymentId: string | null = null;
+    let paymentMethod: string | null = null;
+    let createdAt: string | null = null;
     if (link.stripePaymentIntentId) {
       const dbPayment = await db.payment.findUnique({
         where:  { stripePaymentIntentId: link.stripePaymentIntentId },
-        select: { id: true },
+        select: { id: true, metadata: true, createdAt: true },
       });
       internalPaymentId = dbPayment?.id ?? null;
+      createdAt         = dbPayment?.createdAt?.toISOString() ?? null;
+      if (dbPayment?.metadata) {
+        try {
+          const meta = JSON.parse(dbPayment.metadata) as Record<string, string>;
+          paymentMethod = meta.paymentMethodType ?? null;
+        } catch { /* ignore */ }
+      }
     }
     return (
       <PaySuccess
@@ -251,6 +259,10 @@ export default async function PayPage({ params, searchParams }: Props) {
         businessName={businessName}
         customerName={link.customerName}
         paymentId={internalPaymentId}
+        primaryColor={primaryColor}
+        logoUrl={merchantLogoUrl}
+        createdAt={createdAt ?? undefined}
+        paymentMethod={paymentMethod}
       />
     );
   }
@@ -273,30 +285,19 @@ export default async function PayPage({ params, searchParams }: Props) {
     const payUrl  = `${baseUrl}/pay/${token}`;
 
     return (
-      <div className="flex min-h-screen flex-col lg:flex-row">
-        <RequestHeader
-          businessName={businessName}
-          description={link.description}
-          amount={link.amount}
-          currency={link.currency}
-          expiresAt={link.expiresAt}
-          customerName={link.customerName}
-          merchantLogoUrl={merchantLogoUrl}
-        />
-        <div className="flex flex-1 flex-col justify-center bg-white px-6 py-10 lg:px-14">
-          <div className="mx-auto w-full max-w-sm">
-            <TestPayCheckout
-              token={token}
-              amount={link.amount}
-              currency={link.currency}
-              description={link.description}
-              businessName={businessName}
-              payUrl={payUrl}
-            />
-            <div className="mt-4 flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
-              <HexLogo size={13} className="text-slate-400" />
-              <span>Entorno de prueba</span>
-            </div>
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+        <div className="w-full max-w-sm space-y-4">
+          <TestPayCheckout
+            token={token}
+            amount={link.amount}
+            currency={link.currency}
+            description={link.description}
+            businessName={businessName}
+            payUrl={payUrl}
+          />
+          <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
+            <HexLogo size={13} className="text-slate-400" />
+            <span>Entorno de prueba</span>
           </div>
         </div>
       </div>
@@ -318,7 +319,7 @@ export default async function PayPage({ params, searchParams }: Props) {
         return <LinkUnavailable status="canceled" />;
       }
 
-      const platformFee = Math.round(link.amount * 0.04) + 25;
+      const platformFee = calculateFee(link.amount);
 
       const pi = await stripe.paymentIntents.create({
         amount:        link.amount,
@@ -348,90 +349,17 @@ export default async function PayPage({ params, searchParams }: Props) {
   if (!clientSecret) return <LinkUnavailable status="canceled" />;
 
   return (
-    <div className="flex min-h-screen flex-col lg:flex-row">
-
-      {/* ── Panel izquierdo ─────────────────────────────────────────────── */}
-      <RequestHeader
-        businessName={businessName}
-        description={link.description}
-        amount={link.amount}
-        currency={link.currency}
-        expiresAt={link.expiresAt}
-        customerName={link.customerName}
-        merchantLogoUrl={merchantLogoUrl}
-      />
-
-      {/* ── Panel derecho (formulario) ──────────────────────────────────── */}
-      <div className="flex flex-1 flex-col justify-center bg-white px-6 py-10 lg:px-14">
-        <div className="mx-auto w-full max-w-md">
-
-          {/* ── Cabecera compacta en móvil (QR scan) ─────────────────────────── */}
-          <div className="lg:hidden mb-5">
-            <div className="flex items-center justify-between rounded-2xl bg-slate-900 px-4 py-3.5">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white">
-                  <HexLogo size={22} className="text-slate-900" />
-                </div>
-                <div>
-                  {businessName !== "PayForce" && (
-                    <p className="text-[13px] font-semibold text-white leading-tight">{businessName}</p>
-                  )}
-                  {link.description && (
-                    <p className="text-[11px] text-white/40 leading-tight truncate max-w-[140px]">{link.description}</p>
-                  )}
-                </div>
-              </div>
-              <div className="text-right">
-                <p className="text-[22px] font-extrabold text-white tabular-nums leading-none">
-                  {formatCurrency(link.amount / 100, link.currency)}
-                </p>
-                <p className="text-[10px] text-white/30 mt-0.5">a pagar</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="mb-4 flex items-center gap-2">
-            <CreditCard className="h-4 w-4 text-slate-400" />
-            <p className="text-[13px] font-semibold uppercase tracking-wider text-slate-500">
-              Elige cómo pagar
-            </p>
-          </div>
-
-          {link.customerEmail && (
-            <div className="mb-4">
-              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                Email de confirmación
-              </p>
-              <div className="overflow-hidden rounded-xl border border-slate-200">
-                <input
-                  type="email"
-                  defaultValue={link.customerEmail}
-                  readOnly
-                  className="w-full bg-slate-50 px-4 py-3.5 text-[14px] text-slate-700 outline-none"
-                />
-              </div>
-            </div>
-          )}
-
-          <PayCheckout
-            clientSecret={clientSecret}
-            token={token}
-            amount={link.amount}
-            currency={link.currency}
-            description={link.description}
-            customerEmail={link.customerEmail}
-            customerName={link.customerName}
-          />
-
-          <div className="mt-6 flex items-center justify-center gap-2 text-[11px] text-slate-400">
-            <Lock className="h-3 w-3 text-slate-300" />
-            <span>Pago seguro ·</span>
-            <HexLogo size={14} className="text-slate-400" />
-            <Link href="/" className="hover:underline text-slate-400">Privacidad</Link>
-          </div>
-        </div>
-      </div>
-
-    </div>
+    <PayCheckout
+      clientSecret={clientSecret}
+      token={token}
+      amount={link.amount}
+      currency={link.currency}
+      description={link.description}
+      customerEmail={link.customerEmail}
+      customerName={link.customerName}
+      businessName={businessName}
+      primaryColor={primaryColor}
+      logoUrl={merchantLogoUrl}
+    />
   );
 }

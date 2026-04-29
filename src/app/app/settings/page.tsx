@@ -2,7 +2,7 @@
 
 import { useRef, useState, useEffect } from "react";
 import { useStatementDescriptor } from "@/hooks/useDashboard";
-import { Upload, Trash2, Check, Palette, Landmark, ArrowRight, FileText, Loader2 } from "lucide-react";
+import { Upload, Trash2, Check, Palette, Landmark, ArrowRight, FileText, Loader2, ShoppingBag } from "lucide-react";
 import Link from "next/link";
 import { useBrand }       from "@/context/BrandContext";
 import { THEMES, THEME_IDS } from "@/lib/themes";
@@ -83,6 +83,49 @@ export default function SettingsPage() {
 
   const fileInputRef  = useRef<HTMLInputElement>(null);
   const [saved, setSaved] = useState(false);
+
+  // ── Checkout personalization ──────────────────────────────────────────────
+  const [ckColor,    setCkColor]    = useState("#0A0A0A");
+  const [ckLogo,     setCkLogo]     = useState("");
+  const [ckSaving,   setCkSaving]   = useState(false);
+  const [ckMsg,      setCkMsg]      = useState<{ ok: boolean; text: string } | null>(null);
+  const [ckLoaded,   setCkLoaded]   = useState(false);
+
+  useEffect(() => {
+    fetch("/api/settings/store")
+      .then((r) => r.json())
+      .then((d: { primaryColor?: string; logoUrl?: string }) => {
+        if (d.primaryColor) setCkColor(d.primaryColor);
+        if (d.logoUrl)      setCkLogo(d.logoUrl);
+        setCkLoaded(true);
+      })
+      .catch(() => setCkLoaded(true));
+  }, []);
+
+  async function saveCkSettings() {
+    setCkSaving(true);
+    setCkMsg(null);
+    try {
+      const r = await fetch("/api/settings/store", {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          primaryColor: ckColor,
+          logoUrl:      ckLogo || "",
+        }),
+      });
+      const d = await r.json();
+      if (r.ok) {
+        setCkMsg({ ok: true, text: "Configuración del checkout guardada." });
+      } else {
+        setCkMsg({ ok: false, text: (d as { error?: string }).error ?? "Error al guardar." });
+      }
+    } catch {
+      setCkMsg({ ok: false, text: "Error de red." });
+    } finally {
+      setCkSaving(false);
+    }
+  }
 
   // ── Extracto bancario ──────────────────────────────────────────────────────
   const [descriptor,     setDescriptor]     = useState("");
@@ -270,6 +313,140 @@ export default function SettingsPage() {
           {saved ? <><Check className="h-4 w-4" /> Guardado</> : "Guardar cambios"}
         </button>
       </div>
+
+      {/* ── Personalización del checkout ─────────────────────────────────── */}
+      <section className="rounded-2xl border border-slate-100 bg-white p-6 space-y-5">
+        <div className="flex items-center gap-2">
+          <ShoppingBag className="h-4 w-4 text-slate-400" />
+          <h2 className="text-[13px] font-bold uppercase tracking-widest text-slate-400">
+            Personalización del checkout
+          </h2>
+        </div>
+        <p className="text-[12px] text-slate-400 -mt-2">
+          Estos valores aparecen en la pasarela de pago que ven tus clientes al pagar.
+        </p>
+
+        {!ckLoaded ? (
+          <div className="space-y-3">
+            <div className="h-10 w-full animate-pulse rounded-xl bg-slate-100" />
+            <div className="h-10 w-full animate-pulse rounded-xl bg-slate-100" />
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {/* Color del checkout */}
+            <div className="space-y-2">
+              <label className="text-[13px] font-medium text-slate-700">Color principal del checkout</label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="color"
+                  value={ckColor}
+                  onChange={(e) => setCkColor(e.target.value)}
+                  className="h-10 w-10 cursor-pointer rounded-lg border border-slate-200 bg-white p-1"
+                />
+                <span className="font-mono text-[13px] text-slate-500">{ckColor}</span>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                Controla el color del header, botón de pago y pantalla de carga.
+              </p>
+            </div>
+
+            {/* Logo URL */}
+            <div className="space-y-2">
+              <label className="text-[13px] font-medium text-slate-700">URL del logo (para el checkout)</label>
+              <input
+                type="url"
+                value={ckLogo}
+                onChange={(e) => setCkLogo(e.target.value)}
+                placeholder="https://tu-dominio.com/logo.png"
+                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-[13px] text-slate-800 outline-none focus:border-slate-400 focus:bg-white transition"
+              />
+              <p className="text-[11px] text-slate-400">
+                Imagen PNG, JPG o SVG pública. Aparece en el header y pantalla de carga.
+              </p>
+            </div>
+
+            {/* Vista previa del header */}
+            <div className="space-y-2">
+              <p className="text-[12px] font-medium text-slate-600">Vista previa del checkout</p>
+              <div style={{ borderRadius: "12px", overflow: "hidden", border: "0.5px solid #E5E7EB" }}>
+                {/* Header preview */}
+                <div style={{
+                  background: ckColor,
+                  padding: "12px 16px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    {ckLogo ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={ckLogo} alt="logo" style={{ height: "22px", maxWidth: "100px", objectFit: "contain" }} />
+                    ) : (
+                      <div style={{
+                        width: "22px", height: "22px", borderRadius: "6px",
+                        background: "rgba(255,255,255,0.2)",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}>
+                        <svg width="12" height="12" viewBox="0 0 28 28" fill="none">
+                          <path d="M14 2L25.5 8.5V21.5L14 28L2.5 21.5V8.5L14 2Z" fill="white" />
+                        </svg>
+                      </div>
+                    )}
+                    <span style={{ fontSize: "12px", fontWeight: 500, color: "#fff" }}>Tu empresa</span>
+                  </div>
+                  <span style={{ fontSize: "9px", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                    Pago seguro
+                  </span>
+                </div>
+                {/* Content preview */}
+                <div style={{ background: "#F9FAFB", padding: "12px 16px" }}>
+                  <div style={{ background: "#fff", borderRadius: "8px", border: "0.5px solid #E5E7EB", padding: "10px 12px", marginBottom: "8px" }}>
+                    <div style={{ width: "50px", height: "8px", background: "#F3F4F6", borderRadius: "4px", marginBottom: "6px" }} />
+                    <div style={{ width: "80px", height: "16px", background: "#1F2937", borderRadius: "4px", opacity: 0.7 }} />
+                  </div>
+                  <div style={{ background: "#fff", borderRadius: "8px", border: "0.5px solid #E5E7EB", padding: "10px 12px" }}>
+                    <div style={{ width: "100%", height: "8px", background: "#F3F4F6", borderRadius: "4px", marginBottom: "6px" }} />
+                    <div style={{ width: "100%", height: "28px", background: ckColor, borderRadius: "6px", opacity: 0.9 }} />
+                  </div>
+                </div>
+                {/* Footer preview */}
+                <div style={{
+                  background: "#fff", borderTop: "0.5px solid #F3F4F6",
+                  padding: "6px 16px", display: "flex", justifyContent: "space-between",
+                }}>
+                  <span style={{ fontSize: "8px", color: "#D1D5DB", textTransform: "uppercase", letterSpacing: "0.04em" }}>⬡ PayForce</span>
+                  <span style={{ fontSize: "8px", color: "#D1D5DB", textTransform: "uppercase", letterSpacing: "0.04em" }}>PCI DSS · SSL 256-bit</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Feedback */}
+            {ckMsg && (
+              <div className={`flex items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-medium ${
+                ckMsg.ok
+                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                  : "bg-red-50 text-red-700 border border-red-200"
+              }`}>
+                {ckMsg.ok ? <Check className="h-3.5 w-3.5 shrink-0" /> : null}
+                {ckMsg.text}
+              </div>
+            )}
+
+            <div className="flex justify-end">
+              <button
+                onClick={() => void saveCkSettings()}
+                disabled={ckSaving}
+                className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-[13px] font-semibold text-white transition disabled:opacity-40"
+                style={{ background: theme.accentBg }}
+              >
+                {ckSaving
+                  ? <><Loader2 className="h-4 w-4 animate-spin" /> Guardando…</>
+                  : <><Check className="h-4 w-4" /> Guardar checkout</>}
+              </button>
+            </div>
+          </div>
+        )}
+      </section>
 
       {/* ── Extracto bancario ── */}
       <section className="rounded-2xl border border-slate-100 bg-white p-6 space-y-5">

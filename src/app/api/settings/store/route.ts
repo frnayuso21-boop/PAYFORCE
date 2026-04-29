@@ -11,6 +11,7 @@ interface StoreBody {
   slug?:             string;
   storeDescription?: string;
   primaryColor?:     string;
+  logoUrl?:          string;
   storeEnabled?:     boolean;
 }
 
@@ -32,12 +33,18 @@ function validate(body: unknown): { data: StoreBody } | { error: string } {
   if ("storeEnabled" in b && typeof b.storeEnabled !== "boolean") {
     return { error: "storeEnabled debe ser boolean" };
   }
+  if ("logoUrl" in b && typeof b.logoUrl === "string" && b.logoUrl !== "") {
+    try { new URL(b.logoUrl); } catch {
+      return { error: "logoUrl debe ser una URL válida" };
+    }
+  }
 
   return {
     data: {
       slug:             typeof b.slug             === "string"  ? b.slug             : undefined,
       storeDescription: typeof b.storeDescription === "string"  ? b.storeDescription : undefined,
       primaryColor:     typeof b.primaryColor     === "string"  ? b.primaryColor     : undefined,
+      logoUrl:          typeof b.logoUrl          === "string"  ? b.logoUrl          : undefined,
       storeEnabled:     typeof b.storeEnabled     === "boolean" ? b.storeEnabled     : undefined,
     },
   };
@@ -60,6 +67,7 @@ export async function GET(req: NextRequest) {
       slug:             true,
       storeDescription: true,
       primaryColor:     true,
+      logoUrl:          true,
       storeEnabled:     true,
       businessName:     true,
     },
@@ -89,7 +97,7 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: result.error }, { status: 422 });
   }
 
-  const { slug, storeDescription, primaryColor, storeEnabled } = result.data;
+  const { slug, storeDescription, primaryColor, logoUrl, storeEnabled } = result.data;
 
   // Verificar que la cuenta pertenece al usuario
   const account = await db.connectedAccount.findFirst({
@@ -121,12 +129,14 @@ export async function PATCH(req: NextRequest) {
       ...(slug !== undefined            && { slug: slug || null }),
       ...(storeDescription !== undefined && { storeDescription: storeDescription || null }),
       ...(primaryColor !== undefined    && { primaryColor }),
+      ...(logoUrl !== undefined         && { logoUrl: logoUrl || null }),
       ...(storeEnabled !== undefined    && { storeEnabled }),
     },
     select: {
       slug:             true,
       storeDescription: true,
       primaryColor:     true,
+      logoUrl:          true,
       storeEnabled:     true,
       businessName:     true,
     },
