@@ -25,16 +25,18 @@ const KEYFRAMES = `
 
   .pf-layout {
     display: grid;
-    grid-template-columns: minmax(0,1fr) minmax(0,1fr);
+    grid-template-columns: 1fr 1fr;
+    max-width: 1000px;
+    margin: 0 auto;
     min-height: 100vh;
   }
   .pf-left  { padding: 48px 40px; }
-  .pf-right { padding: 48px 40px; display: flex; flex-direction: column; }
+  .pf-right { display: flex; flex-direction: column; }
 
   @media (max-width: 768px) {
     .pf-layout { grid-template-columns: 1fr; }
     .pf-left   { padding: 32px 24px; }
-    .pf-right  { padding: 32px 24px; flex: 1; }
+    .pf-right  { flex: 1; }
   }
 `;
 
@@ -239,28 +241,27 @@ function SummaryColumn({
 function CheckoutFooter() {
   return (
     <div style={{
-      padding: "16px 40px",
+      padding: "14px 40px",
       borderTop: "0.5px solid rgba(0,0,0,0.06)",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
       gap: "6px",
       background: "#fff",
-      marginTop: "auto",
     }}>
       <span style={{ fontSize: "11px", color: "#9CA3AF", letterSpacing: "0.04em" }}>
         Powered by
       </span>
       <svg width="12" height="12" viewBox="0 0 28 28" fill="none">
-        <path d="M14 2L25.5 8.5V21.5L14 28L2.5 21.5V8.5L14 2Z" fill="#9CA3AF" />
+        <path d="M14 2L25.5 8.5V21.5L14 28L2.5 21.5V8.5L14 2Z" fill="#6B7280" />
       </svg>
       <span style={{
         fontSize: "11px", fontWeight: 600, color: "#6B7280",
-        letterSpacing: "0.04em", textTransform: "uppercase",
+        letterSpacing: "0.06em", textTransform: "uppercase",
       }}>PayForce</span>
-      <span style={{ fontSize: "11px", color: "#D1D5DB", margin: "0 4px" }}>·</span>
+      <span style={{ fontSize: "11px", color: "#D1D5DB", margin: "0 6px" }}>·</span>
       <span style={{ fontSize: "11px", color: "#D1D5DB" }}>PCI DSS</span>
-      <span style={{ fontSize: "11px", color: "#D1D5DB", margin: "0 4px" }}>·</span>
+      <span style={{ fontSize: "11px", color: "#D1D5DB", margin: "0 6px" }}>·</span>
       <span style={{ fontSize: "11px", color: "#D1D5DB" }}>SSL 256-bit</span>
     </div>
   );
@@ -419,81 +420,94 @@ export function PayCheckout({
 
       {/* ── Checkout dos columnas ───────────────────────────────── */}
       {stage === "checkout" && (
-        <div
-          className="pf-layout"
-          style={{
-            fontFamily: "Inter, sans-serif",
-            background: "#F5F5F7",
-            animation: "pfFadeIn 0.4s ease both",
-          }}
-        >
-          {/* COLUMNA IZQUIERDA — resumen */}
-          <SummaryColumn
-            businessName={businessName}
-            logoUrl={logoUrl}
-            color={color}
-            amount={amount}
-            currency={currency}
-            description={description}
-            customerName={customerName}
-          />
-
-          {/* COLUMNA DERECHA — formulario */}
+        <div style={{ minHeight: "100vh", background: "#F5F5F7" }}>
           <div
-            className="pf-right"
-            style={{ background: "#fff" }}
+            className="pf-layout"
+            style={{
+              fontFamily: "Inter, sans-serif",
+              animation: "pfFadeIn 0.4s ease both",
+            }}
           >
-            {/* Título */}
-            <p style={{
-              fontSize: "11px", fontWeight: 600, color: "#9CA3AF",
-              letterSpacing: "0.06em", textTransform: "uppercase",
-              margin: "0 0 20px",
-            }}>
-              Método de pago
-            </p>
+            {/* COLUMNA IZQUIERDA — resumen */}
+            <SummaryColumn
+              businessName={businessName}
+              logoUrl={logoUrl}
+              color={color}
+              amount={amount}
+              currency={currency}
+              description={description}
+              customerName={customerName}
+            />
 
-            {/* Stripe Elements */}
-            <Elements
-              stripe={stripePromise}
-              options={{
-                clientSecret,
-                loader: "auto",
-                appearance: {
-                  theme: "stripe",
-                  variables: {
-                    fontFamily:      "Inter, sans-serif",
-                    borderRadius:    "10px",
-                    colorPrimary:    color,
-                    colorBackground: "#FFFFFF",
-                    colorText:       "#111827",
-                    colorDanger:     "#EF4444",
-                    spacingUnit:     "4px",
-                    fontSizeBase:    "14px",
-                  },
-                  rules: {
-                    ".Input":         { padding: "12px 14px", fontSize: "14px", background: "#fff" },
-                    ".Input:focus":   { boxShadow: `0 0 0 2px ${color}33` },
-                    ".Label":         { fontWeight: "500", color: "#6B7280", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.05em" },
-                    ".Tab":           { borderRadius: "8px", padding: "8px 12px" },
-                    ".Tab--selected": { backgroundColor: color, color: "#fff" },
-                    ".p-Logo":        { display: "none" },
-                    ".p-Logo-img":    { display: "none" },
-                    ".p-TermsText":   { display: "none" },
-                  },
-                },
-              }}
+            {/* COLUMNA DERECHA — formulario */}
+            <div
+              className="pf-right"
+              style={{ background: "#fff" }}
             >
-              <CheckoutForm
-                token={token}
-                amount={amount}
-                currency={currency}
-                customerEmail={customerEmail}
-                color={color}
-              />
-            </Elements>
+              {/* Contenido centrado y limitado a 480px */}
+              <div style={{
+                maxWidth: "480px",
+                margin: "0 auto",
+                width: "100%",
+                padding: "48px 40px",
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                gap: "16px",
+              }}>
+                {/* Título */}
+                <p style={{
+                  fontSize: "11px", fontWeight: 600, color: "#9CA3AF",
+                  letterSpacing: "0.06em", textTransform: "uppercase",
+                  margin: "0 0 4px",
+                }}>
+                  Método de pago
+                </p>
 
-            {/* Footer dentro de la columna derecha */}
-            <CheckoutFooter />
+                {/* Stripe Elements */}
+                <Elements
+                  stripe={stripePromise}
+                  options={{
+                    clientSecret,
+                    loader: "auto",
+                    appearance: {
+                      theme: "stripe",
+                      variables: {
+                        fontFamily:      "Inter, sans-serif",
+                        borderRadius:    "10px",
+                        colorPrimary:    color,
+                        colorBackground: "#FFFFFF",
+                        colorText:       "#111827",
+                        colorDanger:     "#EF4444",
+                        spacingUnit:     "4px",
+                        fontSizeBase:    "14px",
+                      },
+                      rules: {
+                        ".Input":         { padding: "12px 14px", fontSize: "14px", background: "#fff" },
+                        ".Input:focus":   { boxShadow: `0 0 0 2px ${color}33` },
+                        ".Label":         { fontWeight: "500", color: "#6B7280", fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.05em" },
+                        ".Tab":           { borderRadius: "8px", padding: "8px 12px" },
+                        ".Tab--selected": { backgroundColor: color, color: "#fff" },
+                        ".p-Logo":        { display: "none" },
+                        ".p-Logo-img":    { display: "none" },
+                        ".p-TermsText":   { display: "none" },
+                      },
+                    },
+                  }}
+                >
+                  <CheckoutForm
+                    token={token}
+                    amount={amount}
+                    currency={currency}
+                    customerEmail={customerEmail}
+                    color={color}
+                  />
+                </Elements>
+              </div>
+
+              {/* Footer al fondo de la columna derecha */}
+              <CheckoutFooter />
+            </div>
           </div>
         </div>
       )}

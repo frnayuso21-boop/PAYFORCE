@@ -85,22 +85,71 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
 
   // ── Checkout personalization ──────────────────────────────────────────────
-  const [ckColor,    setCkColor]    = useState("#0A0A0A");
-  const [ckLogo,     setCkLogo]     = useState("");
-  const [ckSaving,   setCkSaving]   = useState(false);
-  const [ckMsg,      setCkMsg]      = useState<{ ok: boolean; text: string } | null>(null);
-  const [ckLoaded,   setCkLoaded]   = useState(false);
+  const [ckColor,      setCkColor]      = useState("#0A0A0A");
+  const [ckLogo,       setCkLogo]       = useState("");
+  const [ckSaving,     setCkSaving]     = useState(false);
+  const [ckMsg,        setCkMsg]        = useState<{ ok: boolean; text: string } | null>(null);
+  const [ckLoaded,     setCkLoaded]     = useState(false);
+  const [logoPreview,  setLogoPreview]  = useState<string | null>(null);
+  const [logoUploading,setLogoUploading]= useState(false);
 
   useEffect(() => {
     fetch("/api/settings/store")
       .then((r) => r.json())
       .then((d: { primaryColor?: string; logoUrl?: string }) => {
         if (d.primaryColor) setCkColor(d.primaryColor);
-        if (d.logoUrl)      setCkLogo(d.logoUrl);
+        if (d.logoUrl) {
+          setCkLogo(d.logoUrl);
+          setLogoPreview(d.logoUrl);
+        }
         setCkLoaded(true);
       })
       .catch(() => setCkLoaded(true));
   }, []);
+
+  async function handleLogoUpload(file: File) {
+    if (!file.type.startsWith("image/")) {
+      alert("Solo se aceptan imágenes");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      alert("Máximo 2MB");
+      return;
+    }
+
+    // Preview inmediato con base64
+    const reader = new FileReader();
+    reader.onload = (e) => setLogoPreview(e.target?.result as string);
+    reader.readAsDataURL(file);
+
+    setLogoUploading(true);
+    setCkMsg(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res  = await fetch("/api/dashboard/settings/upload-logo", {
+        method:      "POST",
+        body:        formData,
+        credentials: "include",
+        // Sin Content-Type — el navegador lo añade automáticamente con el boundary correcto
+      });
+      const data = await res.json() as { url?: string; error?: string };
+
+      if (!res.ok || !data.url) {
+        setCkMsg({ ok: false, text: data.error ?? "Error al subir el logo." });
+        return;
+      }
+
+      setCkLogo(data.url);
+      setLogoPreview(data.url);
+      setCkMsg({ ok: true, text: "Logo subido correctamente." });
+    } catch {
+      setCkMsg({ ok: false, text: "Error de red al subir el logo." });
+    } finally {
+      setLogoUploading(false);
+    }
+  }
 
   async function saveCkSettings() {
     setCkSaving(true);

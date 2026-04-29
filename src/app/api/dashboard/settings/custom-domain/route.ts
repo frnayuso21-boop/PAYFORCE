@@ -17,13 +17,17 @@ async function addDomainToVercel(domain: string): Promise<{ ok: boolean; error?:
   const token     = process.env.VERCEL_API_TOKEN;
   const projectId = process.env.VERCEL_PROJECT_ID;
 
-  if (!token || !projectId) {
-    // Sin credenciales Vercel → guardamos igualmente y mostramos DNS manual
+  if (!token) {
+    console.warn("[custom-domain] VERCEL_API_TOKEN no configurado — guardando sin registrar en Vercel");
+    return { ok: true };
+  }
+  if (!projectId) {
+    console.warn("[custom-domain] VERCEL_PROJECT_ID no configurado — guardando sin registrar en Vercel");
     return { ok: true };
   }
 
   try {
-    const res = await fetch(
+    const vercelRes = await fetch(
       `https://api.vercel.com/v10/projects/${projectId}/domains`,
       {
         method:  "POST",
@@ -34,15 +38,18 @@ async function addDomainToVercel(domain: string): Promise<{ ok: boolean; error?:
         body: JSON.stringify({ name: domain }),
       },
     );
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({})) as { error?: { message?: string } };
+    const vercelData = await vercelRes.json().catch(() => ({})) as { error?: { message?: string } };
+    console.log("[Vercel API response]", vercelRes.status, vercelData);
+
+    if (!vercelRes.ok) {
       // Dominio ya existe en el proyecto → OK
-      if (res.status === 409) return { ok: true };
-      return { ok: false, error: body?.error?.message ?? "Error en Vercel API" };
+      if (vercelRes.status === 409) return { ok: true };
+      return { ok: false, error: `Vercel API: ${vercelData?.error?.message ?? "Error desconocido"}` };
     }
     return { ok: true };
-  } catch {
-    // Si Vercel API falla guardamos de todas formas
+  } catch (err) {
+    console.error("[custom-domain] Error llamando a Vercel API:", err);
+    // Si Vercel API falla guardamos igualmente y mostramos DNS manual
     return { ok: true };
   }
 }
@@ -168,9 +175,13 @@ export async function POST(req: NextRequest) {
       note: "Se cobrarán 15€/mes en tu próxima factura una vez el dominio esté verificado.",
     });
   } catch (err) {
+    console.error("[custom-domain POST]", err);
     if (err instanceof AuthError)
       return NextResponse.json({ error: err.message }, { status: err.status });
-    return NextResponse.json({ error: "Error interno" }, { status: 500 });
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Error interno" },
+      { status: 500 },
+    );
   }
 }
 

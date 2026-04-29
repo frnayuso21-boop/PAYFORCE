@@ -255,19 +255,24 @@ export function Sidebar() {
   const [open, setOpen]           = useState(false);
   const [expanded, setExpanded]   = useState<Record<string, boolean>>({});
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const [businessName, setBusinessName] = useState<string>("");
-  const [userEmail,    setUserEmail]    = useState<string>("");
+  const [businessName,        setBusinessName]        = useState<string>("");
+  const [userEmail,           setUserEmail]           = useState<string>("");
+  const [customDomainVerified,setCustomDomainVerified]= useState(false);
 
   useEffect(() => {
-    fetch("/api/dashboard")
-      .then((r) => r.ok ? r.json() : null)
-      .then((d) => {
-        if (!d) return;
+    Promise.all([
+      fetch("/api/dashboard").then((r) => r.ok ? r.json() : null).catch(() => null),
+      fetch("/api/dashboard/settings/custom-domain").then((r) => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([d, dom]) => {
+      if (d) {
         setBusinessName(d.connect?.businessName ?? "");
         setUserEmail(d.connect?.email ?? "");
-      })
-      .catch(() => {});
+      }
+      if (dom?.customDomainVerified) setCustomDomainVerified(true);
+    });
   }, []);
+
+  const displayName = customDomainVerified && businessName ? businessName : "PayForce";
 
   async function handleLogout() {
     setOpen(false);
@@ -334,7 +339,7 @@ export function Sidebar() {
               {businessName || "Mi cuenta"}
             </p>
             <p className="truncate text-[10px] leading-tight" style={{ color: theme.sidebarMuted }}>
-              {userEmail || "PayForce"}
+              {userEmail || displayName}
             </p>
           </div>
           <ChevronDown className={cn("h-3 w-3 shrink-0 transition-transform duration-150", open && "rotate-180")}

@@ -121,14 +121,179 @@ function KpiCard({ label, value, sub, subPositive, loading: l }: {
   );
 }
 
-// ─── Empty chart series ───────────────────────────────────────────────────────
+// ─── Empty chart series (14 días) ────────────────────────────────────────────
 function emptyChartSeries(): ChartPoint[] {
   const now = new Date();
-  return Array.from({ length: 7 }, (_, i) => {
+  return Array.from({ length: 14 }, (_, i) => {
     const d = new Date(now);
-    d.setDate(d.getDate() - (6 - i));
+    d.setDate(d.getDate() - (13 - i));
     return { date: d.toISOString().slice(0, 10), total: 0 };
   });
+}
+
+function padTo14(series: ChartPoint[]): ChartPoint[] {
+  const result: ChartPoint[] = [];
+  const today = new Date();
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().slice(0, 10);
+    result.push(series.find((p) => p.date === dateStr) ?? { date: dateStr, total: 0 });
+  }
+  return result;
+}
+
+// ─── DonutRing ────────────────────────────────────────────────────────────────
+function DonutRing({ pct, label, sublabel }: { pct: number; label: string; sublabel: string }) {
+  const r    = 30;
+  const circ = 2 * Math.PI * r;
+  const dash = Math.max((Math.min(pct, 100) / 100) * circ, 0);
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <svg width="80" height="80" viewBox="0 0 80 80">
+        <circle cx="40" cy="40" r={r} fill="none" stroke="#F3F4F6" strokeWidth="8" />
+        <circle cx="40" cy="40" r={r} fill="none" stroke="#0A0A0A" strokeWidth="8"
+          strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
+          transform="rotate(-90 40 40)" />
+        <text x="40" y="44" textAnchor="middle" fontSize="14" fontWeight="600" fill="#0A0A0A">
+          {Math.round(pct)}%
+        </text>
+      </svg>
+      <div className="text-center">
+        <p className="text-[12px] font-semibold text-[#0A0A0A]">{label}</p>
+        <p className="text-[10px] text-[#9CA3AF]">{sublabel}</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── QuickChargeModal ─────────────────────────────────────────────────────────
+type QCMethod = "link" | "whatsapp" | "qr" | "moto";
+
+function QuickChargeModal({ onClose }: { onClose: () => void }) {
+  const router  = useRouter();
+  const [method,  setMethod]  = useState<QCMethod>("link");
+  const [amount,  setAmount]  = useState("");
+  const [concept, setConcept] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [result,  setResult]  = useState<string | null>(null);
+  const [copied,  setCopied]  = useState(false);
+
+  const METHODS: { id: QCMethod; icon: string; label: string }[] = [
+    { id: "link",     icon: "💳", label: "Link de pago" },
+    { id: "whatsapp", icon: "📱", label: "WhatsApp"     },
+    { id: "qr",       icon: "📷", label: "QR"           },
+    { id: "moto",     icon: "🖥️", label: "Terminal MOTO" },
+  ];
+
+  async function handleGenerate() {
+    const cents = Math.round(Number(amount) * 100);
+    if (!cents || cents < 50) { alert("Importe mínimo: 0,50€"); return; }
+    if (method === "qr") {
+      onClose();
+      router.push(`/dashboard/terminal/qr?amount=${cents}&description=${encodeURIComponent(concept)}`);
+      return;
+    }
+    if (method === "moto") {
+      onClose();
+      router.push(`/dashboard/terminal?amount=${amount}`);
+      return;
+    }
+    setLoading(true);
+    try {
+      const res  = await fetch("/api/payment-links", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: cents, currency: "eur", description: concept || undefined }),
+      });
+      const data = await res.json() as { url?: string; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Error al generar el link");
+      setResult(data.url!);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Error desconocido");
+    } finally { setLoading(false); }
+  }
+
+  function copyResult() {
+    if (!result) return;
+    void navigator.clipboard.writeText(result).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
+  }
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            <span className="text-base">⚡</span>
+            <p className="text-[15px] font-bold text-slate-900">Cobro rápido</p>
+          </div>
+          <button onClick={onClose} className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 transition">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="p-5 space-y-4">
+          {/* Método */}
+          <div className="grid grid-cols-2 gap-2">
+            {METHODS.map((m) => (
+              <button key={m.id} onClick={() => setMethod(m.id)}
+                className="flex items-center gap-2 rounded-xl border px-3 py-2.5 text-[12px] font-medium transition-all"
+                style={method === m.id
+                  ? { borderColor: "#0A0A0A", background: "#0A0A0A10", color: "#0A0A0A" }
+                  : { borderColor: "#E5E7EB", background: "#FAFAFA", color: "#6B7280" }}>
+                <span className="text-[15px]">{m.icon}</span>{m.label}
+              </button>
+            ))}
+          </div>
+
+          {result ? (
+            <div className="space-y-3">
+              <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                <p className="text-[10px] text-slate-400 mb-1">URL generada</p>
+                <p className="text-[12px] font-mono text-slate-700 break-all">{result}</p>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={copyResult}
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-200 py-2.5 text-[13px] font-semibold text-slate-700 hover:bg-slate-50 transition">
+                  {copied ? <><CheckCircle2 className="h-4 w-4 text-emerald-500" />Copiado</> : <><Copy className="h-4 w-4" />Copiar</>}
+                </button>
+                {method === "whatsapp" && (
+                  <a href={`https://wa.me/?text=${encodeURIComponent(`Aquí tienes tu enlace de pago: ${result}`)}`}
+                    target="_blank" rel="noopener noreferrer"
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-[#25D366] py-2.5 text-[13px] font-bold text-white hover:opacity-90 transition">
+                    <MessageCircle className="h-4 w-4" />WhatsApp
+                  </a>
+                )}
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="space-y-2.5">
+                <div>
+                  <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">Importe</label>
+                  <div className="mt-1 flex rounded-xl border border-slate-200 overflow-hidden focus-within:ring-2 focus-within:ring-slate-900/10">
+                    <span className="flex items-center pl-3.5 text-[13px] text-slate-400">€</span>
+                    <input type="number" min="0.50" step="0.01" placeholder="0,00"
+                      value={amount} onChange={(e) => setAmount(e.target.value)}
+                      className="flex-1 py-2.5 px-2 text-[14px] text-slate-900 outline-none placeholder:text-slate-300" />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[11px] font-medium text-slate-500 uppercase tracking-wide">Concepto</label>
+                  <input type="text" placeholder="Ej: Consultoría, factura #001…"
+                    value={concept} onChange={(e) => setConcept(e.target.value)}
+                    className="mt-1 w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-[14px] text-slate-900 outline-none placeholder:text-slate-300 focus:ring-2 focus:ring-slate-900/10" />
+                </div>
+              </div>
+              <button onClick={() => void handleGenerate()} disabled={loading || !amount}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#0A0A0A] py-3 text-[14px] font-semibold text-white transition hover:bg-[#1a1a1a] disabled:opacity-40">
+                {loading ? <><Loader2 className="h-4 w-4 animate-spin" />Generando…</> : "Generar ahora →"}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ─── Fetcher compartido para SWR ─────────────────────────────────────────────
@@ -247,13 +412,37 @@ export default function DashboardPage() {
   const openDisputes = disputes.filter(d => d.status === "needs_response" || d.status === "warning_needs_response");
 
   // KPI: Cobrado hoy
-  const todayStr  = new Date().toISOString().slice(0, 10);
-  const todayPmts = dbPayments.filter(p => p.status === "SUCCEEDED" && (p.stripeCreatedAt ?? p.createdAt).slice(0, 10) === todayStr);
-  const todayVol  = todayPmts.reduce((s, p) => s + p.amount, 0);
-  // KPI: Devoluciones %
+  const todayStr      = new Date().toISOString().slice(0, 10);
+  const todayPmts     = dbPayments.filter(p => p.status === "SUCCEEDED" && (p.stripeCreatedAt ?? p.createdAt).slice(0, 10) === todayStr);
+  const todayVol      = todayPmts.reduce((s, p) => s + p.amount, 0);
+  // KPI: Ticket medio y tasa de éxito
+  const succeededPmts = dbPayments.filter(p => p.status === "SUCCEEDED");
+  const ticketMedio   = succeededPmts.length > 0 ? succeededPmts.reduce((s, p) => s + p.amount, 0) / succeededPmts.length : 0;
+  const successRate   = dbPayments.length > 0 ? (succeededPmts.length / dbPayments.length) * 100 : 0;
+  // KPI: Devoluciones (para referencia interna)
   const totalRefunded  = dbPayments.reduce((s, p) => s + (p.refundedAmount ?? 0), 0);
   const totalSucceeded = dbPayments.reduce((s, p) => p.status === "SUCCEEDED" ? s + p.amount : s, 0);
   const refundPct      = totalSucceeded > 0 ? (totalRefunded / totalSucceeded) * 100 : 0;
+  // Donuts
+  const goalPct   = Math.min(overview ? Math.round((overview.totalVolume / 100) / 5000 * 100) : 0, 100);
+  const convPct   = Math.round(successRate);
+  const recurPct  = (() => {
+    if (!dbPayments.length) return 0;
+    const multiDesc = dbPayments.filter((p) =>
+      p.description && dbPayments.filter((x) => x.description === p.description).length > 1
+    ).length;
+    return Math.round((multiDesc / dbPayments.length) * 100);
+  })();
+  // Top producto
+  const descGroups = dbPayments.reduce<Record<string, { count: number; sum: number }>>((acc, p) => {
+    const key = p.description ?? "Sin descripción";
+    if (!acc[key]) acc[key] = { count: 0, sum: 0 };
+    acc[key].count++;
+    acc[key].sum += p.amount;
+    return acc;
+  }, {});
+  const topProduct      = Object.entries(descGroups).sort((a, b) => b[1].count - a[1].count)[0] ?? null;
+  const totalPaymentSum = Object.values(descGroups).reduce((s, g) => s + g.sum, 0);
 
   const connectAccount: ConnectAccount = dashData?.connect
     ? { ...EMPTY_CONNECT, stripeAccountId: dashData.connect.stripeAccountId, businessName: dashData.connect.businessName,
@@ -301,7 +490,8 @@ export default function DashboardPage() {
   }
 
   // ─── VISTA MOBILE ────────────────────────────────────────────────────────────
-  const [showWhatsApp, setShowWhatsApp] = useState(false);
+  const [showWhatsApp,    setShowWhatsApp]    = useState(false);
+  const [showQuickCharge, setShowQuickCharge] = useState(false);
 
   const MobileView = () => (
     <div className="flex min-h-screen w-full flex-col bg-slate-50 md:hidden">
@@ -506,11 +696,12 @@ export default function DashboardPage() {
         </div>
 
         {/* ── KPI Cards ─────────────────────────────────────────────────────── */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-4 gap-3">
           <KpiCard
             label="Cobrado hoy"
             value={formatCurrency(todayVol / 100)}
             sub={todayPmts.length > 0 ? `${todayPmts.length} pago${todayPmts.length > 1 ? "s" : ""} hoy` : "Sin pagos hoy"}
+            subPositive={todayPmts.length > 0}
             loading={loading}
           />
           <KpiCard
@@ -523,10 +714,16 @@ export default function DashboardPage() {
             loading={loading}
           />
           <KpiCard
-            label="Devoluciones"
-            value={`${refundPct.toFixed(1)}%`}
-            sub={totalRefunded > 0 ? `${formatCurrency(totalRefunded / 100)} devueltos` : "Sin devoluciones"}
-            subPositive={refundPct === 0}
+            label="Ticket medio"
+            value={formatCurrency(ticketMedio / 100)}
+            sub={succeededPmts.length > 0 ? `${succeededPmts.length} pago${succeededPmts.length > 1 ? "s" : ""} exitosos` : "Sin datos"}
+            loading={loading}
+          />
+          <KpiCard
+            label="Tasa de éxito"
+            value={`${successRate.toFixed(1)}%`}
+            sub={dbPayments.length > 0 ? `${succeededPmts.length}/${dbPayments.length} pagos` : "Sin pagos"}
+            subPositive={successRate >= 95}
             loading={loading}
           />
         </div>
@@ -546,39 +743,44 @@ export default function DashboardPage() {
               )}
             </div>
             {loading ? (
-              <div className="flex items-end gap-[6px] h-[60px]">
-                {Array.from({ length: 7 }).map((_, i) => <Sk key={i} className={cn("flex-1 rounded-t-[3px]", i < 3 ? "h-3/4" : i === 6 ? "h-full" : "h-1/2")} />)}
+              <div className="flex items-end gap-[4px] h-[72px]">
+                {Array.from({ length: 14 }).map((_, i) => <Sk key={i} className={cn("flex-1 rounded-t-[3px]", i < 5 ? "h-1/2" : i === 10 ? "h-full" : i < 10 ? "h-3/4" : "h-1/3")} />)}
               </div>
             ) : (() => {
-              const pts   = chartSeries.length ? chartSeries : emptyChartSeries();
+              const pts   = padTo14(chartSeries.length ? chartSeries : emptyChartSeries());
               const maxV  = Math.max(...pts.map(p => p.total), 1);
               const today = new Date().toISOString().slice(0, 10);
-              const DAY: Record<number, string> = { 0: "Dom", 1: "Lun", 2: "Mar", 3: "Mié", 4: "Jue", 5: "Vie", 6: "Sáb" };
+              const DAY: Record<number, string> = { 0: "D", 1: "L", 2: "M", 3: "X", 4: "J", 5: "V", 6: "S" };
               return (
                 <div>
-                  <div className="flex items-end gap-[6px] h-[60px]">
+                  <div className="flex items-end gap-[4px] h-[72px]">
                     {pts.map((p, i) => {
-                      const h   = Math.max((p.total / maxV) * 100, p.total > 0 ? 8 : 4);
-                      const isT = p.date === today;
+                      const h    = Math.max((p.total / maxV) * 100, p.total > 0 ? 8 : 3);
+                      const isT  = p.date === today;
+                      const hasV = p.total > 0;
                       return (
-                        <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                        <div key={i} className="group relative flex-1 flex flex-col items-center gap-1">
                           <div
                             title={`${p.date}: ${formatCurrency(p.total / 100)}`}
                             style={{ height: `${h}%` }}
-                            className={cn("w-full rounded-t-[3px] transition-all", isT ? "bg-[#0A0A0A]" : "bg-[#E5E7EB]")}
+                            className={cn("w-full rounded-t-[3px] transition-all cursor-default",
+                              isT ? "bg-[#0A0A0A]" : hasV ? "bg-[#0A0A0A] opacity-70" : "bg-[#F3F4F6]")}
                           />
+                          <div className="pointer-events-none absolute -top-7 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-800 px-2 py-0.5 text-[9px] text-white opacity-0 transition-opacity group-hover:opacity-100 z-10">
+                            {formatCurrency(p.total / 100)}
+                          </div>
                         </div>
                       );
                     })}
                   </div>
-                  <div className="flex items-center gap-[6px] mt-2">
+                  <div className="flex items-center gap-[4px] mt-2">
                     {pts.map((p, i) => {
                       const dt  = p.date ? new Date(p.date + "T12:00:00") : null;
                       const lbl = dt ? (DAY[dt.getDay()] ?? "") : "";
                       const isT = p.date === today;
                       return (
                         <div key={i} className="flex-1 text-center">
-                          <span className={cn("text-[10px]", isT ? "font-semibold text-[#0A0A0A]" : "text-[#9CA3AF]")}>{lbl}</span>
+                          <span className={cn("text-[10px]", isT ? "font-bold text-[#0A0A0A]" : "text-[#9CA3AF]")}>{lbl}</span>
                         </div>
                       );
                     })}
@@ -598,6 +800,47 @@ export default function DashboardPage() {
           {/* Connect status */}
           <div>
             <ConnectStatusCard account={connectAccount} />
+          </div>
+        </div>
+
+        {/* ── Anillos KPI ──────────────────────────────────────────────────── */}
+        <div className="grid grid-cols-3 gap-3">
+          <div className="col-span-2 rounded-[10px] border border-[#E5E7EB] bg-white p-5">
+            <p className="text-[10px] font-medium uppercase tracking-[0.06em] text-[#9CA3AF] mb-6">Métricas clave</p>
+            <div className="grid grid-cols-3 gap-4 justify-items-center">
+              <DonutRing pct={loading ? 0 : goalPct}  label="Objetivo mes"    sublabel="Meta: 5.000€" />
+              <DonutRing pct={loading ? 0 : convPct}  label="Conversión"      sublabel="Pagos exitosos" />
+              <DonutRing pct={loading ? 0 : recurPct} label="Recurrentes"     sublabel="Descr. repetidas" />
+            </div>
+          </div>
+
+          {/* Producto más vendido */}
+          <div className="rounded-[10px] border border-[#E5E7EB] bg-white p-5 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <span className="text-base">🏆</span>
+                <p className="text-[10px] font-medium uppercase tracking-[0.06em] text-[#9CA3AF]">Producto más vendido</p>
+              </div>
+              {loading ? (
+                <div className="space-y-2"><Sk className="h-4 w-40" /><Sk className="h-3 w-28" /></div>
+              ) : topProduct ? (
+                <>
+                  <p className="text-[14px] font-semibold text-[#0A0A0A] mb-1 truncate">{topProduct[0]}</p>
+                  <p className="text-[11px] text-[#9CA3AF] mb-4">
+                    {topProduct[1].count} venta{topProduct[1].count > 1 ? "s" : ""} · {formatCurrency(topProduct[1].sum / 100)}
+                  </p>
+                  <div className="h-1.5 rounded-full bg-[#F3F4F6] overflow-hidden">
+                    <div className="h-full rounded-full bg-[#0A0A0A] transition-all"
+                      style={{ width: `${totalPaymentSum > 0 ? Math.round((topProduct[1].sum / totalPaymentSum) * 100) : 0}%` }} />
+                  </div>
+                  <p className="text-[10px] text-[#9CA3AF] mt-1.5">
+                    {totalPaymentSum > 0 ? Math.round((topProduct[1].sum / totalPaymentSum) * 100) : 0}% del volumen total
+                  </p>
+                </>
+              ) : (
+                <p className="text-[12px] text-[#9CA3AF]">Sin datos de ventas todavía</p>
+              )}
+            </div>
           </div>
         </div>
 
@@ -791,6 +1034,18 @@ export default function DashboardPage() {
         </div>
 
       </div>
+
+      {/* ── Botón flotante cobro rápido (desktop) ──────────────────────────── */}
+      <button
+        onClick={() => setShowQuickCharge(true)}
+        title="Cobro rápido"
+        className="hidden md:flex fixed bottom-6 right-6 z-[90] h-14 w-14 items-center justify-center rounded-full border-none text-white shadow-[0_4px_20px_rgba(0,0,0,0.18)] transition-transform hover:scale-105 active:scale-95"
+        style={{ background: "#0A0A0A" }}>
+        <Plus className="h-6 w-6" />
+      </button>
+
+      {/* ── Quick charge modal ─────────────────────────────────────────────── */}
+      {showQuickCharge && <QuickChargeModal onClose={() => setShowQuickCharge(false)} />}
     </>
   );
 }

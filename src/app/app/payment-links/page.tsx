@@ -114,6 +114,9 @@ function CopyButton({ text }: { text: string }) {
 
 // ─── Modal de creación ────────────────────────────────────────────────────────
 
+// ─── Tipo de producto ──────────────────────────────────────────────────────────
+interface Product { id: string; name: string; price: number; currency: string; description: string | null }
+
 function CreateModal({ onCreated, onClose }: { onCreated: () => void; onClose: () => void }) {
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState<string | null>(null);
@@ -129,6 +132,61 @@ function CreateModal({ onCreated, onClose }: { onCreated: () => void; onClose: (
     expiresAt:       "",
     reminderEnabled: false,
   });
+
+  // ── Selector de producto ──────────────────────────────────────────────────
+  const [products,       setProducts]       = useState<Product[]>([]);
+  const [productMode,    setProductMode]    = useState<"select" | "new" | "none">("none");
+  const [selectedProduct,setSelectedProduct]= useState<string>("");
+  const [newProdName,    setNewProdName]    = useState("");
+  const [newProdPrice,   setNewProdPrice]   = useState("");
+  const [newProdDesc,    setNewProdDesc]    = useState("");
+  const [prodLoading,    setProdLoading]    = useState(false);
+
+  useEffect(() => {
+    fetch("/api/products").then((r) => r.ok ? r.json() : null).then((d: { products?: Product[] } | null) => {
+      if (d?.products) setProducts(d.products);
+    }).catch(() => null);
+  }, []);
+
+  function handleSelectProduct(id: string) {
+    setSelectedProduct(id);
+    const prod = products.find((p) => p.id === id);
+    if (prod) {
+      setForm((f) => ({
+        ...f,
+        amount:      (prod.price / 100).toFixed(2),
+        currency:    prod.currency,
+        description: prod.name,
+      }));
+    }
+  }
+
+  async function handleCreateProduct() {
+    const priceNum = Number(newProdPrice);
+    if (!newProdName.trim() || !priceNum || priceNum < 0.50) {
+      setError("Nombre y precio válidos (mín. 0,50€) son obligatorios");
+      return;
+    }
+    setProdLoading(true);
+    setError(null);
+    try {
+      const res  = await fetch("/api/products", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newProdName.trim(), price: Math.round(priceNum * 100), description: newProdDesc || undefined }),
+      });
+      const resp = await res.json() as { product?: Product; error?: string };
+      if (!res.ok) throw new Error(resp.error ?? "Error al crear el producto");
+      const newProd = resp.product!;
+      setProducts((prev) => [newProd, ...prev]);
+      handleSelectProduct(newProd.id);
+      setProductMode("select");
+      setSelectedProduct(newProd.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error desconocido");
+    } finally {
+      setProdLoading(false);
+    }
+  }
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setForm((p) => ({ ...p, [k]: e.target.value }));
@@ -218,6 +276,63 @@ function CreateModal({ onCreated, onClose }: { onCreated: () => void; onClose: (
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
+
+            {/* ── Selector de producto ───────────────────────────────────────── */}
+            <div className="rounded-xl border border-slate-100 bg-slate-50 p-3.5 space-y-3">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">Producto</p>
+              <div className="flex gap-3">
+                {[
+                  { key: "none",   label: "Sin producto"    },
+                  { key: "select", label: "Existente"       },
+                  { key: "new",    label: "+ Crear producto" },
+                ].map((opt) => (
+                  <button key={opt.key} type="button"
+                    onClick={() => setProductMode(opt.key as "none" | "select" | "new")}
+                    className="rounded-lg px-3 py-1.5 text-[12px] font-medium transition-all"
+                    style={productMode === opt.key
+                      ? { background: "#0A0A0A", color: "#fff" }
+                      : { background: "#fff", color: "#6B7280", border: "1px solid #E5E7EB" }}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
+              {productMode === "select" && (
+                <select value={selectedProduct} onChange={(e) => handleSelectProduct(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-[13px] text-slate-800 outline-none focus:ring-2 focus:ring-slate-900/10">
+                  <option value="">— Selecciona un producto —</option>
+                  {products.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} · {(p.price / 100).toLocaleString("es-ES", { style: "currency", currency: p.currency.toUpperCase() })}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              {productMode === "new" && (
+                <div className="space-y-2">
+                  <input type="text" placeholder="Nombre del producto"
+                    value={newProdName} onChange={(e) => setNewProdName(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-[13px] text-slate-800 outline-none placeholder:text-slate-300 focus:ring-2 focus:ring-slate-900/10" />
+                  <div className="flex gap-2">
+                    <div className="flex flex-1 rounded-xl border border-slate-200 bg-white overflow-hidden focus-within:ring-2 focus-within:ring-slate-900/10">
+                      <span className="flex items-center pl-3 text-[13px] text-slate-400">€</span>
+                      <input type="number" min="0.50" step="0.01" placeholder="0,00"
+                        value={newProdPrice} onChange={(e) => setNewProdPrice(e.target.value)}
+                        className="flex-1 px-2 py-2 text-[13px] text-slate-800 outline-none placeholder:text-slate-300" />
+                    </div>
+                    <input type="text" placeholder="Descripción (opcional)"
+                      value={newProdDesc} onChange={(e) => setNewProdDesc(e.target.value)}
+                      className="flex-1 rounded-xl border border-slate-200 px-3 py-2 text-[13px] text-slate-800 outline-none placeholder:text-slate-300 focus:ring-2 focus:ring-slate-900/10" />
+                  </div>
+                  <button type="button" onClick={() => void handleCreateProduct()} disabled={prodLoading}
+                    className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-slate-900 py-2.5 text-[13px] font-semibold text-white transition hover:bg-slate-700 disabled:opacity-40">
+                    {prodLoading ? "Creando…" : "+ Crear y usar este producto"}
+                  </button>
+                </div>
+              )}
+            </div>
+
             {/* Importe */}
             <div>
               <label className="mb-1 block text-[12px] font-medium text-slate-600">Importe</label>
