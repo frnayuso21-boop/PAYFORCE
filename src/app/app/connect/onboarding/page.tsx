@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import {
   Building2, User, CreditCard, CheckCircle2,
   ChevronRight, ChevronLeft, Loader2, AlertCircle, Shield,
@@ -113,7 +112,6 @@ const selectCls = inputCls + " appearance-none";
 
 // ── Página principal ──────────────────────────────────────────────────────────
 export default function OnboardingPage() {
-  const router = useRouter();
   const [step,       setStep]       = useState(0);
   const [form,       setForm]       = useState<FormData>(EMPTY);
   const [userEmail,  setUserEmail]  = useState("");
@@ -122,23 +120,11 @@ export default function OnboardingPage() {
   const [done,       setDone]       = useState(false);
 
   useEffect(() => {
-    // Comprobar si ya está verificado
-    fetch("/api/connect/account")
-      .then((r) => r.ok ? r.json() : null)
-      .then((d) => {
-        const real = d?.accounts?.find(
-          (a: { stripeAccountId?: string; chargesEnabled?: boolean }) =>
-            a.stripeAccountId && !a.stripeAccountId.startsWith("local_") && a.chargesEnabled,
-        );
-        if (real) router.replace("/app/dashboard");
-      })
-      .catch(() => {});
-
     fetch("/api/auth/me")
       .then((r) => r.ok ? r.json() : null)
       .then((d) => { const e = d?.user?.email ?? d?.email; if (e) setUserEmail(e); })
       .catch(() => {});
-  }, [router]);
+  }, []);
 
   function set<K extends keyof FormData>(key: K, val: FormData[K]) {
     setForm((prev) => ({ ...prev, [key]: val }));
@@ -204,7 +190,6 @@ export default function OnboardingPage() {
       const d = await r.json();
       if (!r.ok) { setError(d.error ?? "Error al crear la cuenta."); return; }
       setDone(true);
-      setTimeout(() => router.push("/app/dashboard"), 3000);
     } catch {
       setError("Error de red. Inténtalo de nuevo.");
     } finally {
