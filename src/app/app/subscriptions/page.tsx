@@ -3,6 +3,8 @@
 import React, {
   useState, useEffect, useRef, useCallback,
 } from "react";
+import { mutate as swrMutate } from "swr";
+import { useSubscriptionCustomers } from "@/hooks/useData";
 import { MotoAddCardModal } from "@/components/subscriptions/MotoAddCardModal";
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -96,8 +98,6 @@ const EMPTY_FORM = {
 };
 
 function TabCustomers() {
-  const [customers,  setCustomers]  = useState<SubscriptionCustomer[]>([]);
-  const [loading,    setLoading]    = useState(true);
   const [inviting,   setInviting]   = useState<string | null>(null);
   const [modal,      setModal]      = useState(false);
   const [form,       setForm]       = useState(EMPTY_FORM);
@@ -111,23 +111,10 @@ function TabCustomers() {
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
 
-  const load = useCallback(() => {
-    setLoading(true);
-    fetch("/api/subscriptions/customers")
-      .then(async r => {
-        const text = await r.text();
-        if (!text) throw new Error(`Respuesta vacía (HTTP ${r.status})`);
-        return JSON.parse(text);
-      })
-      .then(d => setCustomers(d.data ?? []))
-      .catch(err => {
-        console.error("Error cargando clientes:", err);
-        showToast("⚠️ No se pudieron cargar los clientes. Revisa la consola.");
-      })
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
+  const SUBS_KEY = "/api/subscriptions/customers";
+  const { data: subsData, isLoading: loading } = useSubscriptionCustomers();
+  const customers: SubscriptionCustomer[] = subsData?.data ?? [];
+  const load = useCallback(() => { void swrMutate(SUBS_KEY); }, []);
 
   function openModal() {
     setForm(EMPTY_FORM);

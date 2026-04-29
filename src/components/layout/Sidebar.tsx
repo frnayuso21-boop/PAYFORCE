@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link             from "next/link";
+import { mutate }       from "swr";
 import { HexLogo }      from "@/components/icons/HexLogo";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -52,6 +53,29 @@ type NavItem  = {
   badge?:   string;
 };
 type NavSection = { title?: string; items: NavItem[] };
+
+// ── Mapa de precarga por hover ────────────────────────────────────────────────
+const PREFETCH_MAP: Record<string, string[]> = {
+  "/app/dashboard":    ["/api/dashboard/all"],
+  "/app/balances":     ["/api/dashboard/balance", "/api/payouts/instant", "/api/dashboard/payouts/instant-status"],
+  "/app/transactions": ["/api/dashboard/payments?limit=200&status=all"],
+  "/app/payments":     ["/api/dashboard/payments?limit=100&status=all"],
+  "/app/customers":    ["/api/customers?limit=100"],
+  "/app/products":     ["/api/products?active=false"],
+  "/app/payment-links":["/api/payment-links"],
+  "/app/subscriptions":["/api/subscriptions/customers"],
+  "/app/invoices":     ["/api/dashboard/payments?limit=100", "/api/invoices/manual", "/api/products"],
+  "/app/managers":     ["/api/dashboard/managers"],
+  "/app/settings":     ["/api/dashboard/settings/statement-descriptor"],
+};
+
+function prefetchRoute(href: string) {
+  const apis = PREFETCH_MAP[href];
+  if (!apis) return;
+  apis.forEach((api) => {
+    void mutate(api, fetch(api).then((r) => (r.ok ? r.json() : null)), { revalidate: false });
+  });
+}
 
 // ── Estructura de navegación ─────────────────────────────────────────────────
 const NAV_SECTIONS: NavSection[] = [
@@ -160,7 +184,7 @@ function NavItemRow({
   const hasKids = !!item.children?.length;
 
   return (
-    <div>
+    <div onMouseEnter={() => prefetchRoute(item.href)}>
       <Link
         href={item.href}
         prefetch={!hasKids}
@@ -197,6 +221,7 @@ function NavItemRow({
                 key={child.href}
                 href={child.href}
                 prefetch={true}
+                onMouseEnter={() => prefetchRoute(child.href)}
                 className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[11.5px] transition-colors duration-100"
                 style={childActive
                   ? { color: theme.sidebarActiveText, fontWeight: 600, background: theme.sidebarActiveBg }

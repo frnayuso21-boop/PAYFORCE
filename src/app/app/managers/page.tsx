@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { mutate as swrMutate } from "swr";
+import { useManagers } from "@/hooks/useData";
 import {
   UserPlus, Send, Trash2, ToggleLeft, ToggleRight,
   Mail, Clock, ChevronDown, X, Loader2, CheckCircle2,
@@ -243,9 +245,9 @@ function EmailPreviewModal({ manager, onClose }: { manager: Manager; onClose: ()
 }
 
 // ── Página principal ──────────────────────────────────────────────────────────
+const MANAGERS_KEY = "/api/dashboard/managers";
+
 export default function ManagersPage() {
-  const [managers, setManagers] = useState<Manager[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [previewManager, setPreviewManager] = useState<Manager | null>(null);
   const [sending, setSending] = useState<string | null>(null);
@@ -253,18 +255,10 @@ export default function ManagersPage() {
   const [toggling, setToggling] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
 
-  async function loadManagers() {
-    try {
-      const res = await fetch("/api/dashboard/managers");
-      if (!res.ok) return;
-      const data = await res.json();
-      setManagers(data.managers ?? []);
-    } finally {
-      setLoading(false);
-    }
-  }
+  const { data: mgData, isLoading: loading } = useManagers();
+  const managers: Manager[] = mgData?.managers ?? [];
 
-  useEffect(() => { loadManagers(); }, []);
+  function loadManagers() { void swrMutate(MANAGERS_KEY); }
 
   async function handleToggle(manager: Manager) {
     setToggling(manager.id);
@@ -275,9 +269,7 @@ export default function ManagersPage() {
         body: JSON.stringify({ active: !manager.active }),
       });
       if (!res.ok) return;
-      setManagers((prev) =>
-        prev.map((m) => m.id === manager.id ? { ...m, active: !m.active } : m)
-      );
+      void swrMutate(MANAGERS_KEY);
     } finally {
       setToggling(null);
     }
@@ -289,7 +281,7 @@ export default function ManagersPage() {
     try {
       const res = await fetch(`/api/dashboard/managers/${id}`, { method: "DELETE" });
       if (!res.ok) return;
-      setManagers((prev) => prev.filter((m) => m.id !== id));
+      void swrMutate(MANAGERS_KEY);
     } finally {
       setDeleting(null);
     }
@@ -302,9 +294,7 @@ export default function ManagersPage() {
       const res = await fetch(`/api/dashboard/managers/${id}/report`, { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      setManagers((prev) =>
-        prev.map((m) => m.id === id ? { ...m, lastReportSentAt: new Date().toISOString() } : m)
-      );
+      void swrMutate(MANAGERS_KEY);
       setSentFeedback(id);
       setTimeout(() => setSentFeedback(null), 3000);
     } catch (err) {
@@ -505,7 +495,7 @@ export default function ManagersPage() {
       {showAdd && (
         <AddManagerModal
           onClose={() => setShowAdd(false)}
-          onCreated={(m) => setManagers((prev) => [m, ...prev])}
+          onCreated={() => { void swrMutate(MANAGERS_KEY); setShowAdd(false); }}
         />
       )}
 

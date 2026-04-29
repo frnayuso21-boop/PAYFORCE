@@ -1,6 +1,11 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { mutate as swrMutate } from "swr";
+import {
+  useInvoicesPayments, useInvoiceSettings,
+  useManualInvoices,   useProducts,
+} from "@/hooks/useData";
 import {
   FileText, Download, Settings, Eye, Search, RefreshCw,
   CheckCircle2, XCircle, Clock, Building2, Mail, Phone,
@@ -589,49 +594,44 @@ function SettingsPanel({ settings, onChange, onSave, saving }: {
 }
 
 // ─── Página principal ────────────────────────────────────────────────────────
+const INV_PAYMENTS_KEY = "/api/dashboard/payments?limit=100";
+const INV_SETTINGS_KEY = "/api/invoices/settings";
+const INV_MANUAL_KEY   = "/api/invoices/manual";
+const INV_PRODUCTS_KEY = "/api/products?active=false";
+
 export default function InvoicesPage() {
-  const [tab,           setTab]           = useState<"list" | "manual" | "settings">("list");
-  const [payments,      setPayments]      = useState<InvoicePayment[]>([]);
-  const [manualInvs,    setManualInvs]    = useState<ManualInvoice[]>([]);
-  const [settings,      setSettings]      = useState<InvoiceSettings>(DEFAULT_SETTINGS);
-  const [catalogProds,  setCatalogProds]  = useState<Product[]>([]);
-  const [loading,       setLoading]       = useState(true);
-  const [saving,        setSaving]        = useState(false);
-  const [search,        setSearch]        = useState("");
-  const [preview,       setPreview]       = useState<InvoicePayment | null>(null);
-  const [saveOk,        setSaveOk]        = useState(false);
-  const [showNewInvoice,setShowNewInvoice]= useState(false);
+  const [tab,            setTab]            = useState<"list" | "manual" | "settings">("list");
+  const [saving,         setSaving]         = useState(false);
+  const [search,         setSearch]         = useState("");
+  const [preview,        setPreview]        = useState<InvoicePayment | null>(null);
+  const [saveOk,         setSaveOk]         = useState(false);
+  const [showNewInvoice, setShowNewInvoice] = useState(false);
 
-  const loadAll = useCallback(async () => {
-    setLoading(true);
-    const [pRes, sRes, mRes, prRes] = await Promise.all([
-      fetch("/api/dashboard/payments?limit=100"),
-      fetch("/api/invoices/settings"),
-      fetch("/api/invoices/manual"),
-      fetch("/api/products"),
-    ]);
-    if (pRes.ok) {
-      const j = await pRes.json();
-      setPayments((j.payments ?? []).filter((p: InvoicePayment) => p.status === "SUCCEEDED"));
-    } else {
-      setPayments([]); // 404 u otro error — no reintentar, mostrar vacío
-    }
-    if (sRes.ok) {
-      const j = await sRes.json();
-      if (j.settings) setSettings({ ...DEFAULT_SETTINGS, ...j.settings });
-    }
-    if (mRes.ok) {
-      const j = await mRes.json();
-      setManualInvs(j.invoices ?? []);
-    }
-    if (prRes.ok) {
-      const j = await prRes.json();
-      setCatalogProds(j.products ?? []);
-    }
-    setLoading(false);
+  // ── 4 hooks SWR paralelos → reemplaza Promise.all manual ──────────────────
+  const { data: pmData,  isLoading: l1 } = useInvoicesPayments();
+  const { data: setData, isLoading: l2 } = useInvoiceSettings();
+  const { data: mData,   isLoading: l3 } = useManualInvoices();
+  const { data: prData,  isLoading: l4 } = useProducts();
+
+  const loading     = l1 || l2 || l3 || l4;
+  const payments: InvoicePayment[]  =
+    (pmData?.payments ?? []).filter((p: InvoicePayment) => p.status === "SUCCEEDED");
+  const manualInvs: ManualInvoice[] = mData?.invoices   ?? [];
+  const catalogProds: Product[]     = prData?.products  ?? [];
+  const settings: InvoiceSettings   = setData?.settings
+    ? { ...DEFAULT_SETTINGS, ...setData.settings }
+    : DEFAULT_SETTINGS;
+
+  // Estado local para edición del formulario de configuración
+  const [settingsForm, setSettingsForm] = useState<InvoiceSettings>(settings);
+  useEffect(() => { setSettingsForm(settings); }, [setData]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const loadAll = useCallback(() => {
+    void swrMutate(INV_PAYMENTS_KEY);
+    void swrMutate(INV_SETTINGS_KEY);
+    void swrMutate(INV_MANUAL_KEY);
+    void swrMutate(INV_PRODUCTS_KEY);
   }, []);
-
-  useEffect(() => { loadAll(); }, [loadAll]);
 
   async function saveSettings() {
     setSaving(true);
@@ -645,7 +645,7 @@ export default function InvoicesPage() {
   }
 
   function changeField(k: keyof InvoiceSettings, v: string) {
-    setSettings(prev => ({ ...prev, [k]: v }));
+    setSettingsForm(prev => ({ ...prev, [k]: v }));
   }
 
   const filtered = payments.filter(p =>
@@ -809,7 +809,7 @@ export default function InvoicesPage() {
               )}
             </div>
             <SettingsPanel
-              settings={settings}
+              settings={settingsForm}
               onChange={changeField}
               onSave={saveSettings}
               saving={saving}
@@ -915,7 +915,7 @@ export default function InvoicesPage() {
                               onClick={async () => {
                                 if (!confirm("¿Eliminar esta factura?")) return;
                                 const res = await fetch(`/api/invoices/manual/${inv.id}`, { method: "DELETE" });
-                                if (res.ok) setManualInvs(prev => prev.filter(x => x.id !== inv.id));
+                                if (res.ok) void swrMutate(INV_MANUAL_KEY);
                               }}
                               className="rounded-lg border border-red-100 px-2 py-1.5 text-red-400 hover:bg-red-50 transition"
                             >
@@ -937,7 +937,7 @@ export default function InvoicesPage() {
       {showNewInvoice && (
         <NewInvoiceModal
           onClose={() => setShowNewInvoice(false)}
-          onCreated={inv => { setManualInvs(prev => [inv, ...prev]); setShowNewInvoice(false); setTab("manual"); }}
+          onCreated={() => { void swrMutate(INV_MANUAL_KEY); setShowNewInvoice(false); setTab("manual"); }}
           products={catalogProds}
         />
       )}

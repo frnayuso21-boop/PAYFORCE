@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState, useCallback } from "react";
+import { mutate as swrMutate } from "swr";
+import { useProducts } from "@/hooks/useData";
 import {
   Package, Plus, Search, Tag, Edit2, Trash2, X,
   Save, Loader2, Image as ImageIcon, ToggleLeft, ToggleRight,
@@ -332,40 +334,29 @@ function ProductCard({ product, onEdit, onDelete, onToggle }: {
 }
 
 // ─── Página principal ─────────────────────────────────────────────────────────
+const PRODUCTS_KEY = "/api/products?active=false";
+
 export default function ProductsPage() {
-  const [products,  setProducts]  = useState<Product[]>([]);
-  const [loading,   setLoading]   = useState(true);
   const [q,         setQ]         = useState("");
   const [category,  setCategory]  = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editing,   setEditing]   = useState<Product | null>(null);
   const [toast,     setToast]     = useState("");
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const res = await fetch("/api/products?active=false");
-    if (res.ok) {
-      const j = await res.json();
-      setProducts(j.products ?? []);
-    }
-    setLoading(false);
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
+  const { data: prodsData, isLoading: loading } = useProducts();
+  const products: Product[] = prodsData?.products ?? [];
+  const load = useCallback(() => { void swrMutate(PRODUCTS_KEY); }, []);
 
   function showToast(msg: string) {
     setToast(msg);
     setTimeout(() => setToast(""), 2500);
   }
 
-  function handleSaved(p: Product) {
-    setProducts(prev => {
-      const exists = prev.find(x => x.id === p.id);
-      return exists ? prev.map(x => x.id === p.id ? p : x) : [p, ...prev];
-    });
+  function handleSaved(_p: Product) {
+    void swrMutate(PRODUCTS_KEY);
     setShowModal(false);
     setEditing(null);
-    showToast(editing ? "Producto actualizado" : "Producto creado");
+    showToast(_p.id ? "Producto actualizado" : "Producto creado");
   }
 
   async function handleToggle(id: string, active: boolean) {
@@ -373,10 +364,7 @@ export default function ProductsPage() {
       method: "PUT", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ active }),
     });
-    if (res.ok) {
-      const { product } = await res.json();
-      setProducts(prev => prev.map(p => p.id === id ? product : p));
-    }
+    if (res.ok) void swrMutate(PRODUCTS_KEY);
   }
 
   const categories = Array.from(new Set(products.map(p => p.category).filter(Boolean))) as string[];
@@ -476,7 +464,7 @@ export default function ProductsPage() {
             <ProductCard
               key={p.id} product={p}
               onEdit={prod => { setEditing(prod); setShowModal(true); }}
-              onDelete={id => setProducts(prev => prev.filter(x => x.id !== id))}
+              onDelete={() => void swrMutate(PRODUCTS_KEY)}
               onToggle={handleToggle}
             />
           ))}

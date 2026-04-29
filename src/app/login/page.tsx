@@ -6,6 +6,12 @@ import { Eye, EyeOff }                  from "lucide-react";
 import { createSupabaseClient }          from "@/lib/supabase/client";
 import Link                              from "next/link";
 import { PayForceLogo }                  from "@/components/marketing/PayForceLogo";
+import { mutate }                        from "swr";
+
+function prefetchDashboard() {
+  const urls = ["/api/dashboard/all", "/api/dashboard/payments?limit=100&status=all"];
+  urls.forEach((u) => void mutate(u, fetch(u).then((r) => r.ok ? r.json() : null), { revalidate: false }));
+}
 
 // ─── Formulario de login ───────────────────────────────────────────────────────
 function LoginForm() {
@@ -93,6 +99,7 @@ function LoginForm() {
           headers: { "Content-Type": "application/json" },
           body:    JSON.stringify({ event: "LOGIN_SUCCESS" }),
         });
+        prefetchDashboard();
         router.push(from);
       }
       router.refresh();
