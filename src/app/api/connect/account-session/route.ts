@@ -4,11 +4,8 @@ import { db }                        from "@/lib/db";
 import { requireAuth, getUserPrimaryAccount, AuthError } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
-  console.log("=== ACCOUNT SESSION DEBUG ===");
-
   try {
     const { user } = await requireAuth(req);
-    console.log("User:", user?.id);
 
     let stripeAccountId: string | null = null;
     let body: { accountId?: string } = {};
@@ -19,14 +16,12 @@ export async function POST(req: NextRequest) {
         where: { stripeAccountId: body.accountId, userId: user.id },
       });
       if (!account) {
-        console.error("Cuenta no encontrada:", body.accountId);
         return NextResponse.json({ error: "Cuenta no encontrada o sin permisos" }, { status: 403 });
       }
       stripeAccountId = body.accountId;
     } else {
       const primary = await getUserPrimaryAccount(user.id);
       if (!primary) {
-        console.error("No hay cuenta activa para user:", user.id);
         return NextResponse.json(
           { error: "No tienes ninguna cuenta activa. Completa el onboarding primero." },
           { status: 422 },
@@ -35,10 +30,7 @@ export async function POST(req: NextRequest) {
       stripeAccountId = primary.stripeAccountId;
     }
 
-    console.log("Stripe Account ID:", stripeAccountId);
-
     if (!stripeAccountId || stripeAccountId.startsWith("local_")) {
-      console.error("Account ID inválido o placeholder:", stripeAccountId);
       return NextResponse.json(
         { error: "La cuenta aún no está registrada en Stripe. Completa el onboarding." },
         { status: 422 },
@@ -89,22 +81,20 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      console.log("Account session created:", accountSession.client_secret?.slice(0, 20) + "…");
       return NextResponse.json({ client_secret: accountSession.client_secret });
 
     } catch (stripeErr) {
-      console.error("=== STRIPE ERROR ===", stripeErr);
+      console.error("[connect/account-session] Stripe error", stripeErr);
       const msg = (stripeErr as { message?: string })?.message ?? "Error desconocido de Stripe";
       return NextResponse.json({ error: msg }, { status: 500 });
     }
 
   } catch (err) {
     if (err instanceof AuthError) {
-      console.error("Auth error:", err.message);
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
+    console.error("[connect/account-session]", err);
     const msg = (err as { message?: string })?.message ?? "Error interno";
-    console.error("=== ERROR INESPERADO ===", msg, err);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

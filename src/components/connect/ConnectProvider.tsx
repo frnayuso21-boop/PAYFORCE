@@ -43,8 +43,6 @@ interface ConnectProviderProps {
 export function ConnectProvider({ children, accountId, onError, onReady }: ConnectProviderProps) {
   const stripeConnect: StripeConnectInstance = useMemo(() => {
     const fetchClientSecret = async (): Promise<string> => {
-      console.log("[ConnectProvider] Solicitando AccountSession…", { accountId });
-
       const res = await fetch("/api/connect/account-session", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
@@ -52,24 +50,19 @@ export function ConnectProvider({ children, accountId, onError, onReady }: Conne
       });
 
       const data = await res.json().catch(() => ({})) as { client_secret?: string; error?: string };
-      console.log("Account session response:", data);
 
       if (data.error) {
-        console.error("Error creating account session:", data.error);
         const err = new Error(data.error);
         onError?.(err);
         throw err;
       }
 
       if (!res.ok || !data.client_secret) {
-        const msg = `Error ${res.status} — sin client_secret en la respuesta`;
-        console.error("[ConnectProvider]", msg);
-        const err = new Error(msg);
+        const err = new Error(`Error ${res.status} — sin client_secret en la respuesta`);
         onError?.(err);
         throw err;
       }
 
-      console.log("[ConnectProvider] client_secret obtenido ✓");
       onReady?.();
       return data.client_secret;
     };

@@ -91,7 +91,7 @@ export async function GET(req: NextRequest) {
     const totalFees   = aggAll._sum.platformFee             ?? 0;
 
     return NextResponse.json({ available, pending, thisMonth, grossVolume, netVolume, totalFees, transfers, currency: "eur" }, {
-      headers: { "Cache-Control": "private, max-age=30, stale-while-revalidate=60" },
+      headers: { "Cache-Control": "private, s-maxage=30, stale-while-revalidate=60" },
     });
   } catch (err) {
     if (err instanceof AuthError)

@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     //     await cio.identify(userId, { email: user.email, created_at: Date.now() / 1000 });
     // ──────────────────────────────────────────────────────────────────────────
 
-    console.log(`[marketing] Añadir a lista: ${user.email} (mock)`);
+    void user;
 
     return NextResponse.json({ ok: true, subscribed: true });
   } catch (err) {

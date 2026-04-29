@@ -67,7 +67,10 @@ export async function GET(
 
     // ── Fallback: datos locales ───────────────────────────────────────────
     const p = await db.payment.findFirst({
-      where: { id: chargeId },
+      where: {
+        id: chargeId,
+        connectedAccountId: account.id,
+      },
     });
     if (!p) return NextResponse.json({ error: "Charge not found" }, { status: 404 });
 

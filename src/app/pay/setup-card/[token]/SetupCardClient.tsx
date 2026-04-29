@@ -17,6 +17,7 @@ interface InviteData {
   customer:     { name: string; email: string };
   business:     { name: string };
   expiresAt:    string;
+  token:        string;
 }
 
 // ─── CardForm ─────────────────────────────────────────────────────────────────
@@ -58,7 +59,11 @@ function CardForm({ data }: { data: InviteData }) {
       await fetch(`/api/subscriptions/customers/${data.customerId}`, {
         method:  "PATCH",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ stripePaymentMethodId: pmId, status: "ACTIVE" }),
+        body:    JSON.stringify({
+          stripePaymentMethodId: pmId,
+          status:                "ACTIVE",
+          inviteToken:           data.token,
+        }),
       }).catch(() => null);
     }
 
@@ -163,7 +168,7 @@ export default function SetupCardClient({ token }: { token: string }) {
       .then(r => r.json())
       .then(d => {
         if (d.error) { setError(d.error); return; }
-        setData(d as InviteData);
+        setData({ ...d, token } as InviteData);
       })
       .catch(() => setError("No se pudo cargar el enlace"))
       .finally(() => setLoading(false));

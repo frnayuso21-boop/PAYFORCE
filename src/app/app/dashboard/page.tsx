@@ -29,7 +29,7 @@ const EMPTY_CONNECT: ConnectAccount = {
   chargesEnabled: false, payoutsEnabled: false, detailsSubmitted: false,
   createdAt: "2000-01-01T00:00:00.000Z",
 };
-const POLL_MS = 5_000;
+const POLL_MS = 60_000;
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 interface OverviewData {

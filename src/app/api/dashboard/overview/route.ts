@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
 
     if (accountIds.length === 0) {
       return NextResponse.json(emptyResponse, {
-        headers: { "Cache-Control": "private, max-age=30, stale-while-revalidate=60" },
+        headers: { "Cache-Control": "private, s-maxage=30, stale-while-revalidate=60" },
       });
     }
 
@@ -80,7 +80,12 @@ export async function GET(req: NextRequest) {
       ? { status: "SUCCEEDED", createdAt: { gte: thisStart, lt: thisEnd }, ...accountFilter }
       : { status: "SUCCEEDED", createdAt: { gte: thisStart }, ...accountFilter };
 
-    const [thisPeriod, prevPeriod, balance, ...dailyAggs] = await Promise.all([
+    // Para la serie diaria pedimos los pagos del rango y los agrupamos en
+    // memoria — antes esto eran hasta 90 queries `aggregate()` paralelas.
+    const dailyRangeStart = days[0]?.start ?? rangeStart;
+    const dailyRangeEnd   = days[days.length - 1]?.end ?? rangeEnd;
+
+    const [thisPeriod, prevPeriod, balance, dailyRows] = await Promise.all([
       db.payment.aggregate({
         where: thisWhere,
         _sum:   { amount: true, applicationFeeAmount: true },
@@ -95,18 +100,29 @@ export async function GET(req: NextRequest) {
       stripeOpts
         ? stripe.balance.retrieve({}, stripeOpts).catch(() => null)
         : Promise.resolve(null),
-      ...days.map(({ start, end }) =>
-        db.payment.aggregate({
-          where: { status: "SUCCEEDED", createdAt: { gte: start, lt: end }, ...accountFilter },
-          _sum:  { amount: true, applicationFeeAmount: true },
-        })
-      ),
+      db.payment.findMany({
+        where: {
+          status:    "SUCCEEDED",
+          createdAt: { gte: dailyRangeStart, lt: dailyRangeEnd },
+          ...accountFilter,
+        },
+        select: { createdAt: true, amount: true, applicationFeeAmount: true },
+      }),
     ]);
 
-    const chartSeries = days.map(({ date }, i) => {
-      const gross = dailyAggs[i]._sum.amount ?? 0;
-      const fees  = dailyAggs[i]._sum.applicationFeeAmount ?? 0;
-      return { date, total: gross, net: gross - fees };
+    // Indexar pagos del día para reconstruir la serie en O(n) total
+    const dayBuckets = new Map<string, { gross: number; fees: number }>();
+    for (const row of dailyRows) {
+      const key = toISODate(row.createdAt);
+      const cur = dayBuckets.get(key) ?? { gross: 0, fees: 0 };
+      cur.gross += row.amount;
+      cur.fees  += row.applicationFeeAmount ?? 0;
+      dayBuckets.set(key, cur);
+    }
+
+    const chartSeries = days.map(({ date }) => {
+      const b = dayBuckets.get(date) ?? { gross: 0, fees: 0 };
+      return { date, total: b.gross, net: b.gross - b.fees };
     });
 
     const totalVolume = thisPeriod._sum.amount              ?? 0;
@@ -140,7 +156,7 @@ export async function GET(req: NextRequest) {
       },
       chartSeries,
     }, {
-      headers: { "Cache-Control": "private, max-age=30, stale-while-revalidate=60" },
+      headers: { "Cache-Control": "private, s-maxage=30, stale-while-revalidate=60" },
     });
   } catch (err) {
     if (err instanceof AuthError) {

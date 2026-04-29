@@ -18,18 +18,30 @@ export async function GET(req: NextRequest) {
 
     if (customers.length === 0) return NextResponse.json({ invoices: [] });
 
-    const allInvoices: Stripe.Invoice[] = [];
-    for (const c of customers.slice(0, 20)) {
-      if (!c.stripeCustomerId) continue;
-      try {
-        const list = await stripe.invoices.list({ customer: c.stripeCustomerId, limit: 10 });
-        allInvoices.push(...list.data);
-      } catch { /* skip */ }
-    }
+    const stripeOpts = account.stripeAccountId.startsWith("local_")
+      ? undefined
+      : { stripeAccount: account.stripeAccountId };
+
+    const targets = customers
+      .slice(0, 20)
+      .filter((c): c is { stripeCustomerId: string } => Boolean(c.stripeCustomerId));
+
+    const allInvoices: Stripe.Invoice[] = (
+      await Promise.all(
+        targets.map((c) =>
+          stripe.invoices
+            .list({ customer: c.stripeCustomerId, limit: 10 }, stripeOpts)
+            .then((r) => r.data)
+            .catch(() => [] as Stripe.Invoice[]),
+        ),
+      )
+    ).flat();
 
     allInvoices.sort((a, b) => b.created - a.created);
 
-    return NextResponse.json({ invoices: allInvoices.slice(0, 50) });
+    return NextResponse.json({ invoices: allInvoices.slice(0, 50) }, {
+      headers: { "Cache-Control": "private, s-maxage=30, stale-while-revalidate=60" },
+    });
   } catch (err) {
     console.error("[billing/invoices]", err);
     return NextResponse.json({ error: "Error interno" }, { status: 500 });

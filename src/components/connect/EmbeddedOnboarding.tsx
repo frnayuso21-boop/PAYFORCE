@@ -48,7 +48,6 @@ export function EmbeddedOnboarding({
       clearTimeout(timerRef.current);
       timerRef.current = null;
     }
-    console.log("[EmbeddedOnboarding] Componente listo ✓");
   }
 
   function handleError(err: Error) {

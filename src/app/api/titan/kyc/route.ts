@@ -20,7 +20,14 @@ export async function GET(req: NextRequest) {
       select: { stripeAccountId: true },
     });
 
-    const sessions = await stripe.identity.verificationSessions.list({ limit: 20 });
+    if (!account?.stripeAccountId || account.stripeAccountId.startsWith("local_")) {
+      return NextResponse.json({ sessions: [], stripeAccountId: account?.stripeAccountId });
+    }
+
+    const sessions = await stripe.identity.verificationSessions.list(
+      { limit: 20 },
+      { stripeAccount: account.stripeAccountId },
+    );
 
     const mapped = sessions.data.map((s) => ({
       id:         s.id,
@@ -47,8 +54,19 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   try {
-    const { user } = await requireAuth(req);
-    await getUserAccountIds(user.id);
+    const { user }   = await requireAuth(req);
+    const accountIds = await getUserAccountIds(user.id);
+    if (!accountIds.length) {
+      return NextResponse.json({ error: "No connected account" }, { status: 400 });
+    }
+
+    const account = await db.connectedAccount.findFirst({
+      where:  { id: accountIds[0] },
+      select: { stripeAccountId: true },
+    });
+    if (!account?.stripeAccountId || account.stripeAccountId.startsWith("local_")) {
+      return NextResponse.json({ error: "Stripe account not connected" }, { status: 400 });
+    }
 
     const body = await req.json() as {
       customerEmail?: string;
@@ -56,20 +74,23 @@ export async function POST(req: NextRequest) {
       returnUrl:      string;
     };
 
-    const session = await stripe.identity.verificationSessions.create({
-      type: "document",
-      metadata: {
-        customerEmail: body.customerEmail ?? "",
-        customerName:  body.customerName  ?? "",
-        createdBy:     user.id,
-      },
-      options: {
-        document: {
-          require_matching_selfie: true,
+    const session = await stripe.identity.verificationSessions.create(
+      {
+        type: "document",
+        metadata: {
+          customerEmail: body.customerEmail ?? "",
+          customerName:  body.customerName  ?? "",
+          createdBy:     user.id,
         },
+        options: {
+          document: {
+            require_matching_selfie: true,
+          },
+        },
+        return_url: body.returnUrl,
       },
-      return_url: body.returnUrl,
-    });
+      { stripeAccount: account.stripeAccountId },
+    );
 
     return NextResponse.json({
       id:     session.id,

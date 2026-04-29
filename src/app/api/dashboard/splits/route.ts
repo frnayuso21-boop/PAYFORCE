@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     });
 
     return NextResponse.json({ splits }, {
-      headers: { "Cache-Control": "private, max-age=30, stale-while-revalidate=60" },
+      headers: { "Cache-Control": "private, s-maxage=30, stale-while-revalidate=60" },
     });
   } catch (err) {
     if (err instanceof AuthError) {

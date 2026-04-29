@@ -19,25 +19,24 @@ export async function GET(req: NextRequest) {
     const isRealStripe = !account.stripeAccountId.startsWith("local_");
 
     if (isRealStripe) {
-      // ── Stripe: obtener todos los charges paginando hasta el final ────────
-      const allCharges: import("stripe").Stripe.Charge[] = [];
-      let lastId: string | undefined;
-      let hasMore = true;
-
-      while (hasMore) {
-        const page = await stripe.charges.list(
-          { limit: 100, ...(lastId ? { starting_after: lastId } : {}) },
-          { stripeAccount: account.stripeAccountId },
-        );
-        allCharges.push(...page.data);
-        hasMore = page.has_more;
-        if (page.data.length > 0) lastId = page.data[page.data.length - 1].id;
-      }
+      // ── Stripe: limitar a una página acotada ─────────────────────────────
+      // Antes hacía un while(hasMore) sin tope que en cuentas con miles de
+      // charges podía tardar 30+ segundos y golpear rate limits.
+      const stripePageSize = Math.min(limit, 100);
+      const stripeRes = await stripe.charges.list(
+        {
+          limit: stripePageSize,
+          ...(startingAfter ? { starting_after: startingAfter } : {}),
+        },
+        { stripeAccount: account.stripeAccountId },
+      );
+      const allCharges = stripeRes.data;
 
       // ── BD: pagos locales (pueden incluir pagos de test o sin charge en Stripe)
       const dbPayments = await db.payment.findMany({
         where:   { connectedAccountId: account.id },
         orderBy: { createdAt: "desc" },
+        take:    limit,
       });
 
       // IDs de Stripe ya presentes para evitar duplicados
@@ -108,8 +107,12 @@ export async function GET(req: NextRequest) {
         return true;
       });
 
-      return NextResponse.json({ payments, hasMore: false }, {
-        headers: { "Cache-Control": "private, max-age=30, stale-while-revalidate=60" },
+      const nextCursor = stripeRes.has_more && allCharges.length
+        ? allCharges[allCharges.length - 1].id
+        : null;
+
+      return NextResponse.json({ payments, hasMore: stripeRes.has_more, nextCursor }, {
+        headers: { "Cache-Control": "private, s-maxage=30, stale-while-revalidate=60" },
       });
     }
 
@@ -142,8 +145,8 @@ export async function GET(req: NextRequest) {
       paymentIntentId: p.stripePaymentIntentId ?? null,
     }));
 
-    return NextResponse.json({ payments, hasMore: false }, {
-      headers: { "Cache-Control": "private, max-age=30, stale-while-revalidate=60" },
+    return NextResponse.json({ payments, hasMore: false, nextCursor: null }, {
+      headers: { "Cache-Control": "private, s-maxage=30, stale-while-revalidate=60" },
     });
   } catch (err) {
     if (err instanceof AuthError)
