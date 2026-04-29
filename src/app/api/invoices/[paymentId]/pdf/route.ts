@@ -1,48 +1,19 @@
 /**
  * GET /api/invoices/[paymentId]/pdf
  *
- * Endpoint PÚBLICO para que el cliente descargue su recibo de pago
+ * Endpoint PÚBLICO para que el cliente descargue su factura/recibo
  * tras completar el checkout en /pay/[token].
  * Solo funciona para pagos con status SUCCEEDED.
+ * Reutiliza la plantilla InvoiceDocument de @/lib/invoice-pdf.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { renderToStream }            from "@react-pdf/renderer";
 import { createElement }             from "react";
 import { db }                        from "@/lib/db";
-import { ReceiptDocument }           from "@/lib/receipt-pdf";
-import type { ReceiptData }          from "@/lib/receipt-pdf";
+import { InvoiceDocument }           from "@/lib/invoice-pdf";
+import type { InvoiceData }          from "@/lib/invoice-pdf";
 
 export const dynamic = "force-dynamic";
-
-function fmt(cents: number, currency = "eur") {
-  return new Intl.NumberFormat("es-ES", {
-    style: "currency", currency: currency.toUpperCase(),
-  }).format(cents / 100);
-}
-
-function fmtDate(d: string | Date) {
-  return new Intl.DateTimeFormat("es-ES", {
-    day: "2-digit", month: "long", year: "numeric",
-  }).format(new Date(d));
-}
-
-function fmtTime(d: string | Date) {
-  return new Intl.DateTimeFormat("es-ES", {
-    hour: "2-digit", minute: "2-digit",
-  }).format(new Date(d));
-}
-
-function pmLabel(type?: string | null): string {
-  switch (type) {
-    case "card":       return "Tarjeta";
-    case "bizum":      return "Bizum";
-    case "apple_pay":  return "Apple Pay";
-    case "google_pay": return "Google Pay";
-    case "klarna":     return "Klarna";
-    case "sepa_debit": return "SEPA Débito";
-    default:           return "—";
-  }
-}
 
 export async function GET(
   _req: NextRequest,
@@ -54,7 +25,7 @@ export async function GET(
     where:   { id: paymentId },
     include: {
       connectedAccount: {
-        select: { businessName: true, primaryColor: true },
+        include: { invoiceSettings: true },
       },
     },
   });
@@ -63,31 +34,57 @@ export async function GET(
     return NextResponse.json({ error: "Pago no encontrado o no completado" }, { status: 404 });
   }
 
-  let meta: Record<string, string> = {};
-  try { if (payment.metadata) meta = JSON.parse(payment.metadata) as Record<string, string>; } catch { /* ignore */ }
+  const acc = payment.connectedAccount;
+  const cfg = acc?.invoiceSettings;
 
-  const payDate = payment.stripeCreatedAt ?? payment.createdAt;
-  const year    = payDate.getFullYear();
-  const suffix  = paymentId.slice(-4).toUpperCase();
+  // Número de factura: usa la numeración de InvoiceSettings si existe, si no genera uno por defecto
+  const prefix = cfg?.invoicePrefix ?? "PF";
+  const num    = cfg?.nextInvoiceNumber ?? 1;
+  const year   = (payment.stripeCreatedAt ?? payment.createdAt).getFullYear();
+  const invoiceNumber = `${prefix}-${year}-${String(num).padStart(4, "0")}`;
 
-  const data: ReceiptData = {
-    reference:     `PF-${year}-${suffix}`,
-    date:          fmtDate(payDate),
-    time:          fmtTime(payDate),
-    merchantName:  payment.connectedAccount?.businessName || "PayForce",
-    accentColor:   payment.connectedAccount?.primaryColor || "#0A0A0A",
-    customerName:  payment.customerName,
-    customerEmail: payment.customerEmail,
-    description:   payment.description,
-    amount:        payment.amount,
-    currency:      payment.currency,
-    paymentMethod: pmLabel(meta.paymentMethodType),
-    paymentId:     payment.id,
+  const data: InvoiceData = {
+    invoiceNumber,
+    invoiceDate:     (payment.stripeCreatedAt ?? payment.createdAt).toISOString(),
+    status:          payment.status,
+    merchantName:    cfg?.companyName   || acc?.businessName || "PayForce",
+    merchantEmail:   cfg?.email         || acc?.email        || "",
+    merchantCountry: cfg?.country       || acc?.country      || "ES",
+    merchantTaxId:   cfg?.taxId         || undefined,
+    merchantAddress: cfg?.address       || undefined,
+    merchantCity:    cfg?.city          || undefined,
+    merchantPostal:  cfg?.postalCode    || undefined,
+    merchantPhone:   cfg?.phone         || undefined,
+    merchantWebsite: cfg?.website       || undefined,
+    merchantLogoUrl: cfg?.logoUrl       || acc?.logoUrl      || null,
+    accentColor:     cfg?.accentColor   || acc?.primaryColor || "#6366f1",
+    invoiceNotes:    cfg?.invoiceNotes  || undefined,
+    paymentTerms:    cfg?.paymentTerms  || "Pago inmediato",
+    bankAccount:     cfg?.bankAccount   || undefined,
+    customerName:    payment.customerName  ?? undefined,
+    customerEmail:   payment.customerEmail ?? undefined,
+    paymentId:       payment.id,
+    stripeId:        payment.stripePaymentIntentId,
+    description:     payment.description ?? undefined,
+    amount:          payment.amount,
+    currency:        payment.currency,
+    applicationFee:  payment.applicationFeeAmount,
+    netAmount:       payment.netAmount,
+    createdAt:       (payment.stripeCreatedAt ?? payment.createdAt).toISOString(),
   };
 
-  const doc    = createElement(ReceiptDocument, { d: data });
+  // Incrementar número de factura si hay InvoiceSettings (fire-and-forget)
+  if (cfg) {
+    db.invoiceSettings.update({
+      where: { id: cfg.id },
+      data:  { nextInvoiceNumber: { increment: 1 } },
+    }).catch(() => {});
+  }
+
+  const doc    = createElement(InvoiceDocument, { d: data });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const stream = await renderToStream(doc as any);
+  const filename = `factura-${invoiceNumber}.pdf`;
 
   const readable = new ReadableStream({
     start(controller) {
@@ -100,7 +97,7 @@ export async function GET(
   return new NextResponse(readable, {
     headers: {
       "Content-Type":        "application/pdf",
-      "Content-Disposition": `attachment; filename="recibo-${paymentId}.pdf"`,
+      "Content-Disposition": `attachment; filename="${filename}"`,
       "Cache-Control":       "no-store",
     },
   });
