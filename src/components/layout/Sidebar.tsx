@@ -94,7 +94,15 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: "Payment Links",   href: "/app/payment-links",  icon: ExternalLink },
       { label: "Facturas",        href: "/app/invoices",       icon: FileText     },
-      { label: "Suscripciones",   href: "/app/subscriptions",  icon: RefreshCw    },
+      {
+        label: "Suscripciones",
+        href:  "/app/subscriptions",
+        icon:  RefreshCw,
+        children: [
+          { label: "Clientes",  href: "/app/subscriptions"         },
+          { label: "Importar",  href: "/app/subscriptions/import"  },
+        ],
+      },
       { label: "Titan 1.4.1",     href: "/app/titan",          icon: Cpu          },
       {
         label: "Métodos de Pago",
