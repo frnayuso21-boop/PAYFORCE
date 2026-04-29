@@ -229,6 +229,11 @@ async function handlePaymentSucceeded(pi: Stripe.PaymentIntent, eventId: string,
         where: { stripePaymentIntentId: pi.id },
         data:  { paymentLinkId: link.id },
       });
+      // Marcar reminder como pagado si existe
+      await db.paymentReminder.updateMany({
+        where: { paymentLinkId: link.id, status: "pending" },
+        data:  { status: "paid", paidAt: new Date() },
+      });
     }
     log.info("payment_link.paid", { eventId, token });
   }

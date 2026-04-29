@@ -5,6 +5,7 @@ import Image from "next/image";
 import {
   Link2, Copy, CheckCheck, Plus, XCircle,
   Clock, CheckCircle2, AlertTriangle, ExternalLink,
+  MessageCircle, Bell, BellOff, Send,
 } from "lucide-react";
 import { Button }         from "@/components/ui/button";
 import { formatCurrency, formatDate, cn } from "@/lib/utils";
@@ -119,12 +120,14 @@ function CreateModal({ onCreated, onClose }: { onCreated: () => void; onClose: (
   const [result,  setResult]  = useState<{ url: string } | null>(null);
 
   const [form, setForm] = useState({
-    amount:       "",
-    currency:     "eur",
-    description:  "",
-    customerName:  "",
-    customerEmail: "",
-    expiresAt:    "",
+    amount:          "",
+    currency:        "eur",
+    description:     "",
+    customerName:    "",
+    customerEmail:   "",
+    customerPhone:   "",
+    expiresAt:       "",
+    reminderEnabled: false,
   });
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -147,12 +150,14 @@ function CreateModal({ onCreated, onClose }: { onCreated: () => void; onClose: (
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          amount:        amountCents,
-          currency:      form.currency,
-          description:   form.description || undefined,
-          customerName:  form.customerName || undefined,
-          customerEmail: form.customerEmail || undefined,
-          expiresAt:     form.expiresAt || undefined,
+          amount:          amountCents,
+          currency:        form.currency,
+          description:     form.description  || undefined,
+          customerName:    form.customerName  || undefined,
+          customerEmail:   form.customerEmail || undefined,
+          customerPhone:   form.customerPhone || undefined,
+          expiresAt:       form.expiresAt     || undefined,
+          reminderEnabled: form.reminderEnabled,
         }),
       });
 
@@ -276,6 +281,23 @@ function CreateModal({ onCreated, onClose }: { onCreated: () => void; onClose: (
               </div>
             </div>
 
+            {/* Teléfono */}
+            <div>
+              <label className="mb-1 block text-[12px] font-medium text-slate-600">
+                Teléfono WhatsApp <span className="text-slate-400">(opcional)</span>
+              </label>
+              <div className="relative">
+                <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-slate-400 text-xs select-none">+34</span>
+                <input
+                  type="tel"
+                  placeholder="612 345 678"
+                  value={form.customerPhone}
+                  onChange={set("customerPhone")}
+                  className="w-full rounded-xl border border-slate-200 pl-11 pr-4 py-2.5 text-sm text-slate-900 outline-none placeholder:text-slate-300 focus:ring-2 focus:ring-slate-900/10"
+                />
+              </div>
+            </div>
+
             {/* Expiración */}
             <div>
               <label className="mb-1 block text-[12px] font-medium text-slate-600">
@@ -289,6 +311,21 @@ function CreateModal({ onCreated, onClose }: { onCreated: () => void; onClose: (
                 className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-slate-900/10"
               />
             </div>
+
+            {/* Recordatorios automáticos */}
+            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 transition hover:border-slate-300">
+              <input
+                type="checkbox"
+                checked={form.reminderEnabled}
+                onChange={(e) => setForm((p) => ({ ...p, reminderEnabled: e.target.checked }))}
+                className="mt-0.5 h-4 w-4 rounded border-slate-300 accent-indigo-600"
+              />
+              <span className="text-[13px] text-slate-600 leading-snug">
+                <span className="font-medium text-slate-800">Activar recordatorios automáticos</span>
+                <br/>
+                <span className="text-[11px] text-slate-400">Email al cliente a los 3, 7 y 14 días si no paga.</span>
+              </span>
+            </label>
 
             {error && (
               <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">{error}</p>
@@ -306,6 +343,158 @@ function CreateModal({ onCreated, onClose }: { onCreated: () => void; onClose: (
             </Button>
           </form>
         )}
+    </div>
+  );
+}
+
+// ─── Recordatorios (Impagos) ──────────────────────────────────────────────────
+
+interface PaymentReminderRow {
+  id:            string;
+  customerEmail: string | null;
+  customerPhone: string | null;
+  customerName:  string | null;
+  amount:        number;
+  currency:      string;
+  status:        string;
+  remindersSent: number;
+  createdAt:     string;
+  paymentLink:   { token: string; description: string | null };
+}
+
+const REMINDER_STATUS: Record<string, { label: string; badge: string }> = {
+  pending:   { label: "Pendiente",  badge: "bg-amber-50 text-amber-700 ring-amber-200" },
+  paid:      { label: "Pagado",     badge: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
+  expired:   { label: "Expirado",   badge: "bg-slate-50 text-slate-500 ring-slate-200" },
+  cancelled: { label: "Cancelado",  badge: "bg-slate-50 text-slate-400 ring-slate-100" },
+};
+
+function RemindersTab() {
+  const [reminders, setReminders] = useState<PaymentReminderRow[]>([]);
+  const [loading,   setLoading]   = useState(true);
+  const [acting,    setActing]    = useState<string | null>(null);
+
+  const APP = process.env.NEXT_PUBLIC_APP_URL ?? "https://payforce.co";
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const res = await fetch("/api/reminders");
+    if (res.ok) {
+      const json = await res.json() as { reminders: PaymentReminderRow[] };
+      setReminders(json.reminders);
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const act = async (id: string, action: "send" | "cancel") => {
+    setActing(id + action);
+    await fetch("/api/reminders", {
+      method:  "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ id, action }),
+    });
+    await load();
+    setActing(null);
+  };
+
+  const openWhatsApp = (r: PaymentReminderRow) => {
+    const url   = `${APP}/pay/${r.paymentLink.token}`;
+    const fmt   = new Intl.NumberFormat("es-ES", { style: "currency", currency: r.currency }).format(r.amount / 100);
+    const name  = r.customerName ? ` ${r.customerName}` : "";
+    const msg   = encodeURIComponent(`Hola${name}! Tienes un pago pendiente de ${fmt} por ${r.paymentLink.description ?? "tu pedido"}:\n\n${url}\n\nPuedes pagar de forma segura con tarjeta. Gracias!`);
+    const phone = r.customerPhone?.replace(/\s+/g, "").replace(/^\+/, "") ?? "";
+    window.open(phone ? `https://wa.me/${phone}?text=${msg}` : `https://wa.me/?text=${msg}`, "_blank");
+  };
+
+  if (loading) return (
+    <div className="space-y-2 py-4">
+      {[1,2,3].map((i) => <div key={i} className="h-16 animate-pulse rounded-xl bg-slate-100" />)}
+    </div>
+  );
+
+  if (reminders.length === 0) return (
+    <div className="rounded-2xl border border-dashed border-slate-200 p-10 text-center">
+      <Bell className="mx-auto mb-3 h-8 w-8 text-slate-300" />
+      <p className="text-[14px] font-semibold text-slate-600">Sin recordatorios</p>
+      <p className="mt-1 text-[12px] text-slate-400">Los recordatorios se crean al activar la opción en el formulario de nuevo link.</p>
+    </div>
+  );
+
+  return (
+    <div className="overflow-x-auto rounded-2xl border border-slate-100 bg-white">
+      <table className="min-w-full divide-y divide-slate-100 text-sm">
+        <thead className="bg-slate-50">
+          <tr>
+            {["Cliente", "Importe", "Creado", "Recordatorios", "Estado", "Acciones"].map((h) => (
+              <th key={h} className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400">{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-50">
+          {reminders.map((r) => {
+            const st = REMINDER_STATUS[r.status] ?? REMINDER_STATUS.pending;
+            const isPending = r.status === "pending";
+            return (
+              <tr key={r.id} className="hover:bg-slate-50/60 transition-colors">
+                <td className="px-4 py-3">
+                  <p className="font-medium text-slate-900">{r.customerName ?? "—"}</p>
+                  <p className="text-[11px] text-slate-400">{r.customerEmail ?? r.customerPhone ?? "Sin contacto"}</p>
+                </td>
+                <td className="px-4 py-3 font-semibold tabular-nums text-slate-900">
+                  {new Intl.NumberFormat("es-ES", { style: "currency", currency: r.currency }).format(r.amount / 100)}
+                </td>
+                <td className="px-4 py-3 text-slate-500 text-[12px]">
+                  {new Date(r.createdAt).toLocaleDateString("es-ES")}
+                </td>
+                <td className="px-4 py-3 text-slate-600">
+                  {r.remindersSent} / 3
+                </td>
+                <td className="px-4 py-3">
+                  <span className={cn("inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium ring-1 ring-inset", st.badge)}>
+                    {st.label}
+                  </span>
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    {isPending && r.customerEmail && (
+                      <button
+                        onClick={() => void act(r.id, "send")}
+                        disabled={acting === r.id + "send"}
+                        title="Enviar recordatorio ahora"
+                        className="flex items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-[11px] font-medium text-indigo-600 hover:bg-indigo-100 disabled:opacity-50 transition-colors"
+                      >
+                        <Send className="h-3 w-3" />
+                        Enviar
+                      </button>
+                    )}
+                    <button
+                      onClick={() => openWhatsApp(r)}
+                      title="Enviar por WhatsApp"
+                      className="flex items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-[11px] font-medium text-emerald-600 hover:bg-emerald-100 transition-colors"
+                    >
+                      <MessageCircle className="h-3 w-3" />
+                      WhatsApp
+                    </button>
+                    {isPending && (
+                      <button
+                        onClick={() => void act(r.id, "cancel")}
+                        disabled={acting === r.id + "cancel"}
+                        title="Cancelar recordatorios"
+                        className="flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[11px] font-medium text-slate-500 hover:bg-slate-100 disabled:opacity-50 transition-colors"
+                      >
+                        <BellOff className="h-3 w-3" />
+                        Cancelar
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -484,11 +673,12 @@ export default function PaymentLinksPage() {
   };
 
   const FILTERS = [
-    { value: "all",      label: "Todos"    },
-    { value: "open",     label: "Activos"  },
-    { value: "paid",     label: "Pagados"  },
-    { value: "expired",  label: "Expirados"},
-    { value: "canceled", label: "Cancelados"},
+    { value: "all",         label: "Todos"         },
+    { value: "open",        label: "Activos"       },
+    { value: "paid",        label: "Pagados"       },
+    { value: "expired",     label: "Expirados"     },
+    { value: "canceled",    label: "Cancelados"    },
+    { value: "reminders",   label: "Recordatorios" },
   ];
 
   return (
@@ -567,7 +757,9 @@ export default function PaymentLinksPage() {
           </div>
 
           {/* Contenido */}
-          {loading ? (
+          {filter === "reminders" ? (
+            <RemindersTab />
+          ) : loading ? (
             <div className="space-y-2.5">
               {[1, 2, 3].map((i) => (
                 <div key={i} className="h-[120px] w-full animate-pulse rounded-2xl bg-white border border-slate-100" />
@@ -656,7 +848,9 @@ export default function PaymentLinksPage() {
 
         {/* Tabla */}
         <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-          {loading ? (
+          {filter === "reminders" ? (
+            <RemindersTab />
+          ) : loading ? (
             <div className="flex items-center justify-center py-16">
               <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-slate-700" />
             </div>

@@ -10,7 +10,7 @@ import {
 } from "@stripe/react-stripe-js";
 import {
   CreditCard, Loader2, CheckCircle2, XCircle, ShieldCheck,
-  Phone, Clock,
+  Phone, Clock, MessageCircle,
 } from "lucide-react";
 
 const pk = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? "";
@@ -50,10 +50,12 @@ function TerminalForm({
   const [description, setDescription] = useState("");
   const [email,       setEmail]       = useState("");
   const [name,        setName]        = useState("");
+  const [phone,       setPhone]       = useState("");
   const [saveCard,    setSaveCard]    = useState(false);
   const [cardOk,      setCardOk]      = useState(false);
   const [brand,       setBrand]       = useState<string | null>(null);
   const [busy,        setBusy]        = useState(false);
+  const [busyWa,      setBusyWa]      = useState(false);
   const [result,      setResult]      = useState<"ok" | "err" | null>(null);
   const [resultMsg,   setResultMsg]   = useState("");
 
@@ -63,6 +65,53 @@ function TerminalForm({
     description.trim().length > 0 &&
     cardOk && stripe &&
     (!saveCard || name.trim().length > 0 || email.trim().length > 0);
+
+  const canWhatsApp = cents >= 50 && description.trim().length > 0;
+
+  const sendWhatsApp = useCallback(async () => {
+    if (!canWhatsApp) return;
+    setBusyWa(true);
+    setResult(null);
+    setResultMsg("");
+    try {
+      const res = await fetch("/api/payment-links", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount:        cents,
+          currency:      "eur",
+          description:   description.trim(),
+          customerEmail: email.trim() || undefined,
+          customerName:  name.trim()  || undefined,
+          customerPhone: phone.trim() || undefined,
+        }),
+      });
+      const data = await res.json() as { url?: string; token?: string; error?: string };
+      if (!res.ok || !data.url) throw new Error(data.error ?? "No se pudo crear el link");
+
+      const amountFormatted = formatMoney(cents);
+      const concept         = description.trim();
+      const paymentUrl      = data.url;
+      const msg = encodeURIComponent(
+        `Hola${name.trim() ? ` ${name.trim()}` : ""}! Aquí tienes tu enlace de pago de ${amountFormatted} para ${concept}:\n\n${paymentUrl}\n\nPuedes pagar de forma segura con tarjeta. Gracias!`
+      );
+
+      const rawPhone = phone.trim().replace(/\s+/g, "");
+      const waUrl = rawPhone
+        ? `https://wa.me/${rawPhone.startsWith("+") ? rawPhone.slice(1) : rawPhone}?text=${msg}`
+        : `https://wa.me/?text=${msg}`;
+      window.open(waUrl, "_blank");
+
+      setResult("ok");
+      setResultMsg("Link de pago creado y WhatsApp abierto");
+      onHistoryRefresh();
+    } catch (e) {
+      setResult("err");
+      setResultMsg(e instanceof Error ? e.message : "Error al crear el link");
+    } finally {
+      setBusyWa(false);
+    }
+  }, [canWhatsApp, cents, description, email, name, phone, onHistoryRefresh]);
 
   const submit = useCallback(async () => {
     if (!stripe || !elements || !canSubmit) return;
@@ -213,6 +262,24 @@ function TerminalForm({
                 />
               </div>
             </div>
+
+            {/* Teléfono para WhatsApp */}
+            <div>
+              <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-widest text-slate-400">
+                Teléfono WhatsApp <span className="normal-case font-normal">(opcional)</span>
+              </label>
+              <div className="relative">
+                <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center text-slate-400 text-sm font-medium select-none">+34</span>
+                <input
+                  type="tel"
+                  placeholder="612 345 678"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 pl-12 pr-4 py-3 text-sm outline-none transition focus:border-emerald-300 focus:ring-2 focus:ring-emerald-50"
+                />
+              </div>
+              <p className="mt-1 text-[11px] text-slate-400">Con o sin prefijo. Si lo dejas vacío, elige el contacto en WhatsApp.</p>
+            </div>
           </div>
 
           {/* Columna derecha — tarjeta */}
@@ -286,19 +353,35 @@ function TerminalForm({
           </div>
         )}
 
-        {/* Botón cobrar */}
-        <button
-          type="button"
-          disabled={!canSubmit || busy}
-          onClick={() => void submit()}
-          className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3.5 text-[14px] font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {busy
-            ? <Loader2    className="h-4 w-4 animate-spin" />
-            : <CreditCard className="h-4 w-4" />
-          }
-          {cents >= 50 ? `Cobrar ${formatMoney(cents)}` : "Cobrar ahora"}
-        </button>
+        {/* Botones de acción */}
+        <div className="mt-5 flex gap-3">
+          <button
+            type="button"
+            disabled={!canSubmit || busy || busyWa}
+            onClick={() => void submit()}
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-600 py-3.5 text-[14px] font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {busy
+              ? <Loader2    className="h-4 w-4 animate-spin" />
+              : <CreditCard className="h-4 w-4" />
+            }
+            {cents >= 50 ? `Cobrar ${formatMoney(cents)}` : "Cobrar ahora"}
+          </button>
+
+          <button
+            type="button"
+            disabled={!canWhatsApp || busyWa || busy}
+            onClick={() => void sendWhatsApp()}
+            title="Crear link de pago y enviar por WhatsApp"
+            className="flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-5 py-3.5 text-[14px] font-semibold text-white shadow-sm transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {busyWa
+              ? <Loader2        className="h-4 w-4 animate-spin" />
+              : <MessageCircle  className="h-4 w-4" />
+            }
+            WhatsApp
+          </button>
+        </div>
       </div>
     </div>
   );

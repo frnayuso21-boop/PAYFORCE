@@ -177,3 +177,67 @@ export async function sendPaymentReceiptEmail(opts: {
 
   if (error) throw new Error(error.message);
 }
+
+// ─── Email: recordatorio de pago pendiente ────────────────────────────────────
+export async function sendPaymentReminderEmail(opts: {
+  to:            string;
+  customerName:  string | null;
+  businessName:  string;
+  amount:        number;
+  currency:      string;
+  concept:       string | null;
+  paymentUrl:    string;
+  reminderNum:   number;
+}) {
+  const { to, customerName, businessName, amount, currency, concept, paymentUrl, reminderNum } = opts;
+  const first = customerName ? customerName.split(" ")[0] : "cliente";
+  const sym   = currency.toLowerCase() === "eur" ? "€" : currency.toUpperCase();
+  const fmt   = `${(amount / 100).toFixed(2)}${sym}`;
+
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/></head>
+<body style="margin:0;padding:0;background:#F5F5F7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 16px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:540px;">
+        <tr><td align="center" style="padding-bottom:28px;">
+          <span style="font-size:17px;font-weight:700;color:#000;letter-spacing:-0.02em;">PayForce</span>
+        </td></tr>
+        <tr><td style="background:#fff;border-radius:18px;padding:36px 32px;box-shadow:0 2px 16px rgba(0,0,0,0.07);">
+          <p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111;letter-spacing:-0.03em;">
+            Hola, ${first} 👋
+          </p>
+          <p style="margin:0 0 24px;font-size:15px;color:#555;line-height:1.6;">
+            Tienes un <strong>pago pendiente de ${fmt}</strong> con <strong>${businessName}</strong>${concept ? ` por concepto de <em>${concept}</em>` : ""}.
+          </p>
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr><td align="center">
+              <a href="${paymentUrl}" style="display:inline-block;background:#000;color:#fff;text-decoration:none;font-size:16px;font-weight:600;padding:16px 40px;border-radius:50px;">
+                Pagar ahora →
+              </a>
+            </td></tr>
+          </table>
+          <p style="margin:24px 0 0;font-size:13px;color:#888;text-align:center;line-height:1.6;">
+            Si ya has realizado el pago, ignora este mensaje.<br/>
+            Recordatorio ${reminderNum} de 3.
+          </p>
+        </td></tr>
+        <tr><td style="padding-top:20px;text-align:center;">
+          <p style="font-size:12px;color:#aaa;margin:0;">Procesado por <strong>PayForce</strong> · Powered by Stripe</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  const { error } = await getResend().emails.send({
+    from:    FROM,
+    to:      [to],
+    subject: `Tienes un pago pendiente de ${businessName}`,
+    html,
+  });
+
+  if (error) throw new Error(error.message);
+}

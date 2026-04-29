@@ -46,9 +46,11 @@ interface CreateLinkBody {
   connectedAccountId?: string;
   customerEmail?:      string;
   customerName?:       string;
+  customerPhone?:      string;
   expiresAt?:          string;
   maxUses?:            number;
   metadata?:           Record<string, string>;
+  reminderEnabled?:    boolean;
 }
 
 export async function POST(req: NextRequest) {
@@ -73,14 +75,16 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as CreateLinkBody;
     const {
       amount,
-      currency     = "eur",
+      currency         = "eur",
       description,
       connectedAccountId: bodyAccountId,
       customerEmail,
       customerName,
+      customerPhone,
       expiresAt,
-      maxUses  = 1,
-      metadata = {},
+      maxUses          = 1,
+      metadata         = {},
+      reminderEnabled  = false,
     } = body;
 
     // ── Validaciones ─────────────────────────────────────────────────────────
@@ -206,9 +210,11 @@ export async function POST(req: NextRequest) {
           amount,
           currency,
           applicationFeeAmount:  0,
-          description:   description   ?? null,
-          customerEmail: customerEmail ?? null,
-          customerName:  customerName  ?? null,
+          description:     description   ?? null,
+          customerEmail:   customerEmail ?? null,
+          customerName:    customerName  ?? null,
+          customerPhone:   customerPhone ?? null,
+          reminderEnabled: reminderEnabled,
           maxUses,
           status:    "open",
           expiresAt: expiresAt ? new Date(expiresAt) : null,
@@ -219,6 +225,24 @@ export async function POST(req: NextRequest) {
           }),
         },
       });
+
+      if (reminderEnabled) {
+        const next3d = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+        await db.paymentReminder.create({
+          data: {
+            paymentLinkId:      link.id,
+            connectedAccountId: account.id,
+            customerEmail:      customerEmail ?? null,
+            customerPhone:      customerPhone ?? null,
+            customerName:       customerName  ?? null,
+            amount,
+            currency,
+            status:         "pending",
+            nextReminderAt: next3d,
+          },
+        });
+      }
+
       const url = `${getBaseUrl(req)}/pay/${token}`;
       await logAuthSecurityAudit(req, session, {
         action:   "PAYMENT_LINK_CREATED",
@@ -272,15 +296,34 @@ export async function POST(req: NextRequest) {
         amount,
         currency,
         applicationFeeAmount: platformFee,
-        description:   description   ?? null,
-        customerEmail: customerEmail ?? null,
-        customerName:  customerName  ?? null,
+        description:     description   ?? null,
+        customerEmail:   customerEmail ?? null,
+        customerName:    customerName  ?? null,
+        customerPhone:   customerPhone ?? null,
+        reminderEnabled: reminderEnabled,
         maxUses,
         status:    "open",
         expiresAt: expiresAt ? new Date(expiresAt) : null,
         metadata:  Object.keys(metadata).length ? JSON.stringify(metadata) : null,
       },
     });
+
+    if (reminderEnabled) {
+      const next3d = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
+      await db.paymentReminder.create({
+        data: {
+          paymentLinkId:      link.id,
+          connectedAccountId: account.id,
+          customerEmail:      customerEmail ?? null,
+          customerPhone:      customerPhone ?? null,
+          customerName:       customerName  ?? null,
+          amount,
+          currency,
+          status:         "pending",
+          nextReminderAt: next3d,
+        },
+      });
+    }
 
     const url = `${getBaseUrl(req)}/pay/${token}`;
 

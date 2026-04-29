@@ -163,6 +163,7 @@ model ConnectedAccount {
   manualInvoices        ManualInvoice[]
   subscriptionCustomers SubscriptionCustomer[]
   batchJobs             BatchJob[]
+  paymentReminders      PaymentReminder[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -378,9 +379,13 @@ model PaymentLink {
   status String @default("open")
 
   // Metadatos opcionales para el checkout
-  description  String?  // Se muestra al cliente en la página de pago
-  customerName String?  // Pre-rellenar nombre en el formulario
-  customerEmail String? // Pre-rellenar email
+  description   String?  // Se muestra al cliente en la página de pago
+  customerName  String?  // Pre-rellenar nombre en el formulario
+  customerEmail String?  // Pre-rellenar email
+  customerPhone String?  // Teléfono para envío por WhatsApp
+
+  // Activar recordatorios automáticos de impago
+  reminderEnabled Boolean @default(false)
 
   // Número máximo de usos (null = un solo uso)
   maxUses   Int @default(1)
@@ -391,6 +396,9 @@ model PaymentLink {
 
   // Relación con el pago realizado (se rellena via webhook)
   payments Payment[]
+
+  // Recordatorios de impago
+  reminders PaymentReminder[]
 
   // Metadatos arbitrarios (referencia de pedido, plan, etc.) — JSON stringificado
   metadata String?
@@ -977,4 +985,40 @@ model PushSubscription {
 
   @@index([userId])
   @@map("push_subscriptions")
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║  PAYMENT REMINDERS — Recordatorios automáticos de cobros pendientes         ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+
+model PaymentReminder {
+  id                 String   @id @default(cuid())
+  paymentLinkId      String
+  connectedAccountId String
+
+  customerEmail  String?
+  customerPhone  String?
+  customerName   String?
+
+  amount   Int
+  currency String @default("eur")
+
+  // pending | paid | expired | cancelled
+  status         String   @default("pending")
+  remindersSent  Int      @default(0)
+  nextReminderAt DateTime?
+  lastReminderAt DateTime?
+  paidAt         DateTime?
+  cancelledAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  paymentLink PaymentLink      @relation(fields: [paymentLinkId], references: [id])
+  account     ConnectedAccount @relation(fields: [connectedAccountId], references: [id])
+
+  @@index([connectedAccountId, status])
+  @@index([nextReminderAt])
+  @@index([paymentLinkId])
+  @@map("payment_reminders")
 }
