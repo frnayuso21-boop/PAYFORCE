@@ -140,14 +140,32 @@ export async function POST(req: NextRequest) {
     if (isRealStripe) {
       // ── Intentar instant; fallback automático a standard ───────────────────
       try {
+        // Obtener el saldo instant_available con net_available (ya descuenta la comisión de plataforma)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const balance = await (stripe.balance.retrieve as any)(
+          { expand: ["instant_available.net_available"] },
+          { stripeAccount: account.stripeAccountId },
+        );
+
+        const instantBalance = (balance as unknown as {
+          instant_available?: Array<{ amount: number; currency: string; net_available?: Array<{ amount: number }> }>
+        }).instant_available?.[0];
+
+        if (!instantBalance || instantBalance.amount <= 0) {
+          throw new Error("No hay saldo disponible para instant payout");
+        }
+
+        const netAvailable = instantBalance.net_available?.[0];
+        const payoutAmount = netAvailable ? netAvailable.amount : instantBalance.amount;
+
         const po = await stripe.payouts.create(
-          { amount: amountAfterFee, currency, method: "instant",
+          { amount: payoutAmount, currency, method: "instant",
             metadata: { instantPayoutRequestId: request.id, merchantAccountId: account.id } },
           { stripeAccount: account.stripeAccountId },
         );
         stripePayoutId = po.id;
         method         = "instant";
-        message        = `Pago instantáneo de ${(amountAfterFee / 100).toFixed(2)} € en proceso. Llegará en minutos.`;
+        message        = `Pago instantáneo de ${(payoutAmount / 100).toFixed(2)} € en proceso. Llegará en minutos.`;
       } catch {
         // Fallback a standard — sin comisión extra, se devuelve el fee al merchant
         // Actualizar registro para reflejar fee = 0 en standard
