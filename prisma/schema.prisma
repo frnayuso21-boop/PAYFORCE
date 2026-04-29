@@ -148,6 +148,12 @@ model ConnectedAccount {
   storeEnabled         Boolean @default(false)
   statementDescriptor  String? @default("")
 
+  // Dominio personalizado para payment links (p.ej. checkout.tuempresa.com)
+  customDomain         String?
+  customDomainVerified Boolean  @default(false)
+  customDomainPlan     String?  @default("none")
+  customDomainAddedAt  DateTime?
+
   managers              Manager[]
   payments              Payment[]
   payouts               Payout[]

@@ -31,6 +31,18 @@ export async function middleware(req: NextRequest) {
     return NextResponse.rewrite(new URL(`/store/${slug}${pathname}`, req.url));
   }
 
+  // ── Dominios personalizados de merchant → dejar pasar /pay/* ─────────────
+  const isCustomDomain =
+    !!host &&
+    !host.includes("payforce.co") &&
+    !host.includes("payforce.io") &&
+    !host.includes("localhost") &&
+    !host.includes("vercel.app") &&
+    !host.endsWith(`.${appHost}`);
+  if (isCustomDomain && pathname.startsWith("/pay/")) {
+    return NextResponse.next();
+  }
+
   // ── Rutas públicas ────────────────────────────────────────────────────────
   const isPublicPath =
     pathname === "/" ||

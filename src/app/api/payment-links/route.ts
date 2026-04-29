@@ -149,6 +149,12 @@ export async function POST(req: NextRequest) {
     // Obtener (o crear) el ConnectedAccount local para la FK
     let account = await db.connectedAccount.findFirst({
       where: { stripeAccountId },
+      select: {
+        id: true, stripeAccountId: true, chargesEnabled: true,
+        payoutsEnabled: true, detailsSubmitted: true, status: true,
+        userId: true,
+        customDomain: true, customDomainVerified: true,
+      },
     });
     if (!account) {
       account = await db.connectedAccount.create({
@@ -241,7 +247,10 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      const url = `${getBaseUrl(req)}/pay/${token}`;
+      const linkBaseUrl = (account?.customDomain && account?.customDomainVerified)
+      ? `https://${account.customDomain}`
+      : getBaseUrl(req);
+    const url = `${linkBaseUrl}/pay/${token}`;
       await logAuthSecurityAudit(req, session, {
         action:   "PAYMENT_LINK_CREATED",
         resource: "payment_link",
@@ -323,7 +332,10 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const url = `${getBaseUrl(req)}/pay/${token}`;
+    const realBaseUrl = (account?.customDomain && account?.customDomainVerified)
+      ? `https://${account.customDomain}`
+      : getBaseUrl(req);
+    const url = `${realBaseUrl}/pay/${token}`;
 
     await logAuthSecurityAudit(req, session, {
       action:   "PAYMENT_LINK_CREATED",

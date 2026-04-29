@@ -2,7 +2,7 @@
 
 import { useRef, useState, useEffect } from "react";
 import { useStatementDescriptor } from "@/hooks/useDashboard";
-import { Upload, Trash2, Check, Palette, Landmark, ArrowRight, FileText, Loader2, ShoppingBag } from "lucide-react";
+import { Upload, Trash2, Check, Palette, Landmark, ArrowRight, FileText, Loader2, ShoppingBag, Globe, AlertCircle, CheckCircle2, Clock } from "lucide-react";
 import Link from "next/link";
 import { useBrand }       from "@/context/BrandContext";
 import { THEMES, THEME_IDS } from "@/lib/themes";
@@ -124,6 +124,96 @@ export default function SettingsPage() {
       setCkMsg({ ok: false, text: "Error de red." });
     } finally {
       setCkSaving(false);
+    }
+  }
+
+  // ── Dominio personalizado ─────────────────────────────────────────────────
+  const [domainInput,    setDomainInput]    = useState("");
+  const [domainData,     setDomainData]     = useState<{
+    customDomain: string | null;
+    customDomainVerified: boolean;
+    customDomainAddedAt: string | null;
+    dnsRecord: { type: string; name: string; value: string };
+  } | null>(null);
+  const [domainLoading,  setDomainLoading]  = useState(true);
+  const [domainSaving,   setDomainSaving]   = useState(false);
+  const [domainVerifying,setDomainVerifying]= useState(false);
+  const [domainDeleting, setDomainDeleting] = useState(false);
+  const [domainMsg,      setDomainMsg]      = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/dashboard/settings/custom-domain")
+      .then((r) => r.json())
+      .then((d) => { setDomainData(d); setDomainLoading(false); })
+      .catch(() => setDomainLoading(false));
+  }, []);
+
+  async function addDomain() {
+    if (!domainInput.trim()) return;
+    setDomainSaving(true);
+    setDomainMsg(null);
+    try {
+      const r = await fetch("/api/dashboard/settings/custom-domain", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ domain: domainInput.trim() }),
+      });
+      const d = await r.json() as { ok?: boolean; error?: string; domain?: string; dnsRecord?: { type: string; name: string; value: string } };
+      if (r.ok && d.ok) {
+        setDomainData((prev) => ({
+          ...prev!,
+          customDomain:         d.domain ?? domainInput.trim(),
+          customDomainVerified: false,
+          customDomainAddedAt:  new Date().toISOString(),
+          dnsRecord:            d.dnsRecord ?? prev!.dnsRecord,
+        }));
+        setDomainInput("");
+        setDomainMsg({ ok: true, text: "Dominio añadido. Configura el DNS y pulsa 'Verificar'." });
+      } else {
+        setDomainMsg({ ok: false, text: d.error ?? "Error al añadir el dominio." });
+      }
+    } catch {
+      setDomainMsg({ ok: false, text: "Error de red." });
+    } finally {
+      setDomainSaving(false);
+    }
+  }
+
+  async function verifyDomain() {
+    setDomainVerifying(true);
+    setDomainMsg(null);
+    try {
+      const r = await fetch("/api/dashboard/settings/custom-domain", { method: "PATCH" });
+      const d = await r.json() as { verified?: boolean; hint?: string; error?: string };
+      if (d.verified) {
+        setDomainData((prev) => prev ? { ...prev, customDomainVerified: true } : prev);
+        setDomainMsg({ ok: true, text: "¡Dominio verificado! Tus links de pago ya usan tu dominio." });
+      } else {
+        setDomainMsg({ ok: false, text: d.hint ?? d.error ?? "DNS aún no propagado. Inténtalo en unos minutos." });
+      }
+    } catch {
+      setDomainMsg({ ok: false, text: "Error de red." });
+    } finally {
+      setDomainVerifying(false);
+    }
+  }
+
+  async function deleteDomain() {
+    if (!confirm("¿Eliminar el dominio personalizado? Tus links volverán a usar payforce.co")) return;
+    setDomainDeleting(true);
+    setDomainMsg(null);
+    try {
+      const r = await fetch("/api/dashboard/settings/custom-domain", { method: "DELETE" });
+      if (r.ok) {
+        setDomainData((prev) => prev ? { ...prev, customDomain: null, customDomainVerified: false, customDomainAddedAt: null } : prev);
+        setDomainMsg({ ok: true, text: "Dominio eliminado." });
+      } else {
+        setDomainMsg({ ok: false, text: "Error al eliminar el dominio." });
+      }
+    } catch {
+      setDomainMsg({ ok: false, text: "Error de red." });
+    } finally {
+      setDomainDeleting(false);
     }
   }
 
@@ -541,6 +631,157 @@ export default function SettingsPage() {
           Ir a cuenta bancaria
           <ArrowRight className="h-3.5 w-3.5 text-slate-400" />
         </Link>
+      </section>
+
+      {/* ── Dominio personalizado ─────────────────────────────────────────── */}
+      <section className="space-y-5 rounded-2xl border border-slate-100 bg-white p-6 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+        <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100">
+            <Globe className="h-4 w-4 text-slate-500" />
+          </div>
+          <div>
+            <h2 className="text-[14px] font-semibold text-slate-900">Dominio personalizado</h2>
+            <p className="text-[12px] text-slate-400">Usa tu propio dominio para los links de pago · 15€/mes</p>
+          </div>
+        </div>
+
+        {domainLoading ? (
+          <div className="flex items-center gap-2 text-[13px] text-slate-400">
+            <Loader2 className="h-4 w-4 animate-spin" /> Cargando…
+          </div>
+        ) : !domainData?.customDomain ? (
+          /* ── Sin dominio configurado ── */
+          <div className="space-y-4">
+            <div className="rounded-xl bg-slate-50 border border-slate-100 p-4 space-y-2 text-[13px] text-slate-500">
+              <p>Sin dominio propio tus links de pago usan:</p>
+              <code className="block font-mono text-[12px] bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-700">
+                payforce.co/pay/token
+              </code>
+              <p className="mt-2">Con dominio propio quedan así:</p>
+              <code className="block font-mono text-[12px] bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-700">
+                checkout.tuempresa.com/pay/token
+              </code>
+            </div>
+
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={domainInput}
+                onChange={(e) => { setDomainInput(e.target.value); setDomainMsg(null); }}
+                placeholder="checkout.tuempresa.com"
+                className="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-[13px] text-slate-900 placeholder:text-slate-400 outline-none focus:border-slate-400 transition"
+              />
+              <button
+                onClick={addDomain}
+                disabled={domainSaving || !domainInput.trim()}
+                className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-semibold text-white transition disabled:opacity-40"
+                style={{ background: theme.accentBg }}
+              >
+                {domainSaving
+                  ? <Loader2 className="h-4 w-4 animate-spin" />
+                  : <Globe className="h-4 w-4" />}
+                Añadir
+              </button>
+            </div>
+
+            {domainMsg && (
+              <div className={`flex items-start gap-2 rounded-xl px-4 py-3 text-[13px] ${domainMsg.ok ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"}`}>
+                {domainMsg.ok
+                  ? <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
+                  : <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />}
+                {domainMsg.text}
+              </div>
+            )}
+          </div>
+        ) : domainData.customDomainVerified ? (
+          /* ── Dominio verificado ── */
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-3">
+              <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
+              <div>
+                <p className="text-[14px] font-semibold text-emerald-800">{domainData.customDomain}</p>
+                <p className="text-[12px] text-emerald-600">Verificado · Activo</p>
+              </div>
+            </div>
+            <div className="rounded-xl bg-slate-50 border border-slate-100 p-4 text-[13px] text-slate-500">
+              <p>Tus links de pago usan:</p>
+              <code className="block font-mono text-[12px] bg-white border border-slate-200 rounded-lg px-3 py-2 mt-2 text-slate-700">
+                {domainData.customDomain}/pay/token
+              </code>
+            </div>
+            {domainMsg && (
+              <div className={`flex items-start gap-2 rounded-xl px-4 py-3 text-[13px] ${domainMsg.ok ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"}`}>
+                {domainMsg.ok ? <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" /> : <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />}
+                {domainMsg.text}
+              </div>
+            )}
+            <button
+              onClick={deleteDomain}
+              disabled={domainDeleting}
+              className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-[13px] font-medium text-red-600 hover:bg-red-100 transition disabled:opacity-40"
+            >
+              {domainDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              Eliminar dominio
+            </button>
+          </div>
+        ) : (
+          /* ── Dominio pendiente de verificación ── */
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 rounded-xl bg-amber-50 border border-amber-100 px-4 py-3">
+              <Clock className="h-5 w-5 text-amber-500 shrink-0" />
+              <div>
+                <p className="text-[14px] font-semibold text-amber-800">{domainData.customDomain}</p>
+                <p className="text-[12px] text-amber-600">Pendiente de verificación DNS</p>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3 text-[13px]">
+              <p className="font-medium text-slate-700">Añade este registro DNS en tu proveedor:</p>
+              <div className="grid grid-cols-3 gap-2 font-mono text-[12px]">
+                <div className="rounded-lg bg-white border border-slate-200 px-3 py-2">
+                  <p className="text-slate-400 text-[10px] uppercase tracking-widest mb-1">Tipo</p>
+                  <p className="text-slate-800 font-semibold">{domainData.dnsRecord.type}</p>
+                </div>
+                <div className="rounded-lg bg-white border border-slate-200 px-3 py-2">
+                  <p className="text-slate-400 text-[10px] uppercase tracking-widest mb-1">Nombre</p>
+                  <p className="text-slate-800 font-semibold">{domainData.dnsRecord.name}</p>
+                </div>
+                <div className="rounded-lg bg-white border border-slate-200 px-3 py-2 col-span-3">
+                  <p className="text-slate-400 text-[10px] uppercase tracking-widest mb-1">Valor</p>
+                  <p className="text-slate-800 font-semibold break-all">{domainData.dnsRecord.value}</p>
+                </div>
+              </div>
+              <p className="text-[12px] text-slate-400">Los cambios DNS tardan 5-30 minutos en propagarse.</p>
+            </div>
+
+            {domainMsg && (
+              <div className={`flex items-start gap-2 rounded-xl px-4 py-3 text-[13px] ${domainMsg.ok ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                {domainMsg.ok ? <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" /> : <Clock className="h-4 w-4 shrink-0 mt-0.5" />}
+                {domainMsg.text}
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                onClick={verifyDomain}
+                disabled={domainVerifying}
+                className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-semibold text-white transition disabled:opacity-40"
+                style={{ background: theme.accentBg }}
+              >
+                {domainVerifying ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                Verificar ahora
+              </button>
+              <button
+                onClick={deleteDomain}
+                disabled={domainDeleting}
+                className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-[13px] font-medium text-slate-600 hover:bg-slate-100 transition disabled:opacity-40"
+              >
+                {domainDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                Eliminar
+              </button>
+            </div>
+          </div>
+        )}
       </section>
     </div>
   );
