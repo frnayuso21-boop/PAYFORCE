@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { loadStripe }          from "@stripe/stripe-js";
 import {
   Elements,
-  CardElement,
+  PaymentElement,
   useStripe,
   useElements,
 } from "@stripe/react-stripe-js";
@@ -30,14 +30,12 @@ function CardForm({ token, data }: { token: string; data: InviteData }) {
     setState("processing");
     setErrMsg(null);
 
-    const cardEl = elements.getElement(CardElement);
-    if (!cardEl) { setState("error"); return; }
-
-    const { error } = await stripe.confirmCardSetup(data.clientSecret, {
-      payment_method: {
-        card:            cardEl,
-        billing_details: { name: data.customer.name, email: data.customer.email },
+    const { error } = await stripe.confirmSetup({
+      elements,
+      confirmParams: {
+        return_url: `${window.location.origin}/setup-card/success`,
       },
+      redirect: "if_required",
     });
 
     if (error) {
@@ -77,17 +75,17 @@ function CardForm({ token, data }: { token: string; data: InviteData }) {
 
       <form onSubmit={handleSubmit}>
         <div style={s.cardBox}>
-          <CardElement options={{
-            style: {
-              base: {
-                fontSize: "16px",
-                color: "#111",
-                fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-                "::placeholder": { color: "#aaa" },
+          <PaymentElement
+            options={{
+              layout: "tabs",
+              defaultValues: {
+                billingDetails: {
+                  name:  data.customer.name,
+                  email: data.customer.email,
+                },
               },
-              invalid: { color: "#FF3B30" },
-            },
-          }} />
+            }}
+          />
         </div>
 
         {errMsg && <p style={s.err}>{errMsg}</p>}

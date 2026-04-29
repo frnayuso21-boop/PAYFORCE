@@ -80,9 +80,9 @@ export async function POST(req: NextRequest) {
 
   // SetupIntent para guardar tarjeta sin cobrar
   const setupIntent = await stripe.setupIntents.create({
-    customer:             stripeCustomer.id,
-    usage:                "off_session",
-    payment_method_types: ["card"],
+    customer:                  stripeCustomer.id,
+    usage:                     "off_session",
+    automatic_payment_methods: { enabled: true },
     metadata: {
       connectedAccountId: account.id,
     },

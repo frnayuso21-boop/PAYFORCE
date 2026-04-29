@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { loadStripe }          from "@stripe/stripe-js";
 import {
   Elements,
-  CardElement,
+  PaymentElement,
   useStripe,
   useElements,
 } from "@stripe/react-stripe-js";
@@ -34,15 +34,13 @@ function CardForm({ data }: { data: InviteData }) {
     setState("processing");
     setErrMsg(null);
 
-    const cardEl = elements.getElement(CardElement);
-    if (!cardEl) { setState("error"); return; }
-
-    const { setupIntent, error } = await stripe.confirmCardSetup(data.clientSecret, {
-      payment_method: {
-        card:            cardEl,
-        billing_details: { name: data.customer.name, email: data.customer.email },
+    const { setupIntent, error } = await stripe.confirmSetup({
+      elements,
+      confirmParams: {
+        return_url: `${window.location.origin}/pay/setup-card/success`,
       },
-    });
+      redirect: "if_required",
+    }) as { setupIntent?: { payment_method: string | { id: string } | null }; error?: { message?: string } };
 
     if (error) {
       setErrMsg(error.message ?? "Error al guardar la tarjeta");
@@ -100,16 +98,14 @@ function CardForm({ data }: { data: InviteData }) {
       <form onSubmit={handleSubmit}>
         <label style={s.label}>Datos de tarjeta</label>
         <div style={s.cardBox}>
-          <CardElement
+          <PaymentElement
             options={{
-              style: {
-                base: {
-                  fontSize: "16px",
-                  color: "#111",
-                  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-                  "::placeholder": { color: "#aaa" },
+              layout: "tabs",
+              defaultValues: {
+                billingDetails: {
+                  name:  data.customer.name,
+                  email: data.customer.email,
                 },
-                invalid: { color: "#FF3B30" },
               },
             }}
           />

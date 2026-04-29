@@ -34,9 +34,9 @@ export async function GET(
 
   // Crear un SetupIntent fresco para esta sesión
   const setupIntent = await stripe.setupIntents.create({
-    customer:             invitation.customer.stripeCustomerId,
-    usage:                "off_session",
-    payment_method_types: ["card"],
+    customer:                 invitation.customer.stripeCustomerId,
+    usage:                    "off_session",
+    automatic_payment_methods: { enabled: true },
     metadata: {
       cardInvitationId:   invitation.id,
       customerId:         invitation.customerId,
