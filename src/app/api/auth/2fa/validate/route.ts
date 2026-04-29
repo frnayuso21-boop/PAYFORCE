@@ -56,7 +56,7 @@ function parseRecentIps(raw: string): string[] {
  */
 export async function POST(req: NextRequest) {
   try {
-    const { user } = await requireAuth(req, { skipPayforce2faGate: true });
+    const { user } = await requireAuth(req);
     const { code } = await req.json() as { code?: string };
     const input    = (code ?? "").trim();
     if (!input) {
