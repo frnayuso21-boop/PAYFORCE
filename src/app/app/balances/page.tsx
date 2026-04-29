@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useState, useRef } from "react";
+import { mutate as swrMutate } from "swr";
+import { useBalance, useInstantPayout, useInstantPayoutStatus } from "@/hooks/useDashboard";
 import { RefreshCw, Zap, ArrowUpRight, CheckCircle2, XCircle, Clock, TrendingUp, CreditCard, X, AlertCircle } from "lucide-react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js";
@@ -159,33 +161,29 @@ const STATUS_LABEL: Record<string, string> = {
   paid: "Pagado", failed: "Fallido", pending: "Pendiente", processing: "Procesando",
 };
 
+const BAL_KEY     = "/api/dashboard/balance";
+const INSTANT_KEY = "/api/payouts/instant";
+const STATUS_KEY  = "/api/dashboard/payouts/instant-status";
+
+function reloadAll() {
+  void swrMutate(BAL_KEY);
+  void swrMutate(INSTANT_KEY);
+  void swrMutate(STATUS_KEY);
+}
+
 export default function BalancesPage() {
-  const [data,           setData]           = useState<BalanceData | null>(null);
-  const [payoutInfo,     setPayoutInfo]     = useState<PayoutInfo | null>(null);
-  const [instantStatus,  setInstantStatus]  = useState<InstantStatus | null>(null);
-  const [loading,        setLoading]        = useState(true);
   const [payoutLoading,  setPayoutLoading]  = useState(false);
   const [payoutMsg,      setPayoutMsg]      = useState<{ ok: boolean; method?: string; text: string } | null>(null);
   const [showCardModal,  setShowCardModal]  = useState(false);
   const [deletingCard,   setDeletingCard]   = useState<string | null>(null);
   const [cardMsg,        setCardMsg]        = useState<{ ok: boolean; text: string } | null>(null);
 
-  const load = () => {
-    setLoading(true);
-    Promise.all([
-      fetch("/api/dashboard/balance").then((r) => r.ok ? r.json() : null),
-      fetch("/api/payouts/instant").then((r) => r.ok ? r.json() : null),
-      fetch("/api/dashboard/payouts/instant-status").then((r) => r.ok ? r.json() : null),
-    ])
-      .then(([bal, poi, ist]) => {
-        if (bal) setData(bal);
-        if (poi) setPayoutInfo(poi);
-        if (ist) setInstantStatus(ist);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  };
-  useEffect(() => { load(); }, []);
+  const { data,          isLoading: loadBal  } = useBalance();
+  const { data: payoutInfo,  isLoading: loadPoi  } = useInstantPayout();
+  const { data: instantStatus } = useInstantPayoutStatus();
+  const loading = loadBal || loadPoi;
+
+  const load = reloadAll;
 
   const handleInstantPayout = async () => {
     setPayoutLoading(true); setPayoutMsg(null);
@@ -218,7 +216,7 @@ export default function BalancesPage() {
   const netVolume   = data?.netVolume   ?? 0;
   const totalFees   = data?.totalFees   ?? 0;
   const currency    = data?.currency    ?? "eur";
-  const transfers   = data?.transfers   ?? [];
+  const transfers: Transfer[]   = data?.transfers   ?? [];
 
   const feeRate           = grossVolume > 0 ? ((totalFees / grossVolume) * 100).toFixed(1) : "0.0";
   const instantAvailable  = payoutInfo?.instantAvailable ?? false;

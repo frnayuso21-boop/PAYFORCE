@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
+import { mutate as swrMutate } from "swr";
+import { usePayments } from "@/hooks/useDashboard";
 import Link from "next/link";
 import {
   RefreshCw, Search, CheckCircle2, XCircle, Clock,
@@ -163,22 +165,13 @@ const FILTERS: { key: FilterKey; label: string }[] = [
 
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function TransactionsPage() {
-  const [payments,     setPayments]     = useState<Payment[]>([]);
-  const [loading,      setLoading]      = useState(true);
   const [filter,       setFilter]       = useState<FilterKey>("all");
   const [search,       setSearch]       = useState("");
   const [refundTarget, setRefundTarget] = useState<Payment | null>(null);
 
-  const load = useCallback(() => {
-    setLoading(true);
-    fetch(`/api/dashboard/payments?limit=200&status=${filter}`)
-      .then((r) => r.ok ? r.json() : { payments: [] })
-      .then((d) => setPayments(d.payments ?? []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [filter]);
-
-  useEffect(() => { load(); }, [load]);
+  const swrKey = `/api/dashboard/payments?limit=200&status=${filter}`;
+  const { data, isLoading: loading } = usePayments(filter, 200);
+  const payments: Payment[] = data?.payments ?? [];
 
   const visible = payments.filter((p) => {
     if (!search) return true;
@@ -196,8 +189,8 @@ export default function TransactionsPage() {
   const totalNeto  = visible.filter(p => p.status === "succeeded").reduce((s, p) => s + p.net, 0);
   const totalFees  = visible.filter(p => p.status === "succeeded").reduce((s, p) => s + p.fee, 0);
 
-  function handleRefundSuccess(id: string) {
-    setPayments(prev => prev.map(p => p.id === id ? { ...p, status: "refunded", refunded: true } : p));
+  function handleRefundSuccess(_id: string) {
+    void swrMutate(swrKey);
   }
 
   return (
@@ -209,7 +202,7 @@ export default function TransactionsPage() {
           <h1 className="text-[20px] font-semibold tracking-tight text-[#0A0A0A]">Transacciones</h1>
           <p className="text-[12px] text-[#9CA3AF] mt-0.5">Historial completo de cobros y movimientos</p>
         </div>
-        <button onClick={load}
+        <button onClick={() => void swrMutate(swrKey)}
           className="flex items-center gap-1.5 rounded-[8px] border border-[#E5E7EB] bg-white px-3 py-1.5 text-[12px] text-[#6B7280] hover:bg-[#F9FAFB] transition">
           <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} /> Actualizar
         </button>

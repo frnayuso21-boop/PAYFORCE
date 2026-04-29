@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
+import { useStatementDescriptor } from "@/hooks/useDashboard";
 import { Upload, Trash2, Check, Palette, Landmark, ArrowRight, FileText, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useBrand }       from "@/context/BrandContext";
@@ -86,22 +87,16 @@ export default function SettingsPage() {
   // ── Extracto bancario ──────────────────────────────────────────────────────
   const [descriptor,     setDescriptor]     = useState("");
   const [savedDescriptor,setSavedDescriptor]= useState("");
-  const [descLoading,    setDescLoading]    = useState(true);
   const [descSaving,     setDescSaving]     = useState(false);
   const [descMsg,        setDescMsg]        = useState<{ ok: boolean; text: string } | null>(null);
 
+  const { data: descData, isLoading: descLoading } = useStatementDescriptor();
   useEffect(() => {
-    fetch("/api/dashboard/settings/statement-descriptor")
-      .then((r) => r.ok ? r.json() : null)
-      .then((d) => {
-        if (d?.statementDescriptor) {
-          setDescriptor(d.statementDescriptor);
-          setSavedDescriptor(d.statementDescriptor);
-        }
-      })
-      .catch(() => {})
-      .finally(() => setDescLoading(false));
-  }, []);
+    if (descData?.statementDescriptor) {
+      setDescriptor(descData.statementDescriptor);
+      setSavedDescriptor(descData.statementDescriptor);
+    }
+  }, [descData]);
 
   function handleDescriptorChange(val: string) {
     setDescriptor(clean(val));

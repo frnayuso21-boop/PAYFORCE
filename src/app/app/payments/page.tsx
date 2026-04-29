@@ -1,5 +1,7 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useState } from "react";
+import { mutate as swrMutate } from "swr";
+import { usePayments } from "@/hooks/useDashboard";
 import Link from "next/link";
 import {
   CreditCard, RefreshCw, Search, ArrowUpRight,
@@ -193,22 +195,13 @@ const FILTERS: { key: FilterKey; label: string }[] = [
 
 // ── Página ─────────────────────────────────────────────────────────────────────
 export default function PaymentsPage() {
-  const [payments,      setPayments]      = useState<Payment[]>([]);
-  const [loading,       setLoading]       = useState(true);
-  const [filter,        setFilter]        = useState<FilterKey>("all");
-  const [search,        setSearch]        = useState("");
-  const [refundTarget,  setRefundTarget]  = useState<Payment | null>(null);
+  const [filter,       setFilter]       = useState<FilterKey>("all");
+  const [search,       setSearch]       = useState("");
+  const [refundTarget, setRefundTarget] = useState<Payment | null>(null);
 
-  const load = useCallback(() => {
-    setLoading(true);
-    fetch(`/api/dashboard/payments?limit=100&status=${filter}`)
-      .then((r) => (r.ok ? r.json() : { payments: [] }))
-      .then((d) => setPayments(d.payments ?? []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [filter]);
-
-  useEffect(() => { load(); }, [load]);
+  const swrKey = `/api/dashboard/payments?limit=100&status=${filter}`;
+  const { data, isLoading: loading } = usePayments(filter, 100);
+  const payments: Payment[] = data?.payments ?? [];
 
   const visible = payments.filter((p) => {
     if (!search) return true;
@@ -224,10 +217,8 @@ export default function PaymentsPage() {
 
   const totalAmount = visible.reduce((s, p) => s + p.amount, 0);
 
-  function handleRefundSuccess(id: string) {
-    setPayments((prev) =>
-      prev.map((p) => p.id === id ? { ...p, status: "refunded", refunded: true } : p)
-    );
+  function handleRefundSuccess(_id: string) {
+    void swrMutate(swrKey);
   }
 
   return (
@@ -244,7 +235,7 @@ export default function PaymentsPage() {
           </p>
         </div>
         <button
-          onClick={load}
+          onClick={() => void swrMutate(swrKey)}
           className="flex items-center gap-1.5 text-[13px] text-slate-500 hover:text-slate-800 transition px-3 py-1.5 rounded-lg border border-slate-200"
           style={{ borderColor: "#E5E7EB" }}
         >

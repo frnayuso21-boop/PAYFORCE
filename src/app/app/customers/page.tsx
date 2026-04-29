@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { mutate as swrMutate } from "swr";
+import { useCustomers } from "@/hooks/useDashboard";
 import { Search, Plus, Download, Users, ArrowUpRight, RefreshCw, Mail, CreditCard, Calendar } from "lucide-react";
 import { formatCurrency, formatDate, getInitials } from "@/lib/utils";
 import { CreateCustomerModal } from "@/components/customers/CreateCustomerModal";
@@ -42,22 +44,17 @@ function Sk({ w = "w-24", h = "h-4" }: { w?: string; h?: string }) {
   return <div className={`${h} ${w} rounded-[5px] bg-[#F3F4F6] animate-pulse`} />;
 }
 
+const CUSTOMERS_KEY = "/api/customers?limit=100";
+
 export default function CustomersPage() {
-  const [customers, setCustomers] = useState<CustomerRow[]>([]);
-  const [loading,   setLoading]   = useState(true);
   const [search,    setSearch]    = useState("");
   const [selected,  setSelected]  = useState<CustomerRow | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
 
-  function loadCustomers() {
-    setLoading(true);
-    fetch("/api/customers?limit=100")
-      .then(r => r.ok ? r.json() : null)
-      .then(data => { if (data?.data) setCustomers(data.data); })
-      .finally(() => setLoading(false));
-  }
+  const { data, isLoading: loading } = useCustomers(100);
+  const customers: CustomerRow[] = data?.data ?? [];
 
-  useEffect(() => { loadCustomers(); }, []);
+  function loadCustomers() { void swrMutate(CUSTOMERS_KEY); }
 
   const filtered = customers.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase()) ||
