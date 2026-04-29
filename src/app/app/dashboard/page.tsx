@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import useSWR from "swr";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -130,18 +131,39 @@ function emptyChartSeries(): ChartPoint[] {
   });
 }
 
+// ─── Fetcher compartido para SWR ─────────────────────────────────────────────
+const swrFetcher = (url: string) => fetch(url).then((r) => r.ok ? r.json() : null);
+
+// Tipo de la respuesta del endpoint consolidado
+interface InitResponse {
+  onboarding: {
+    accountStatus: string; emailVerified: boolean;
+    needsOnboarding: boolean; onboardingCompleted: boolean; mode: string;
+  };
+  dashboard: DashboardData;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 export default function DashboardPage() {
   const router = useRouter();
 
   const [overview,    setOverview]    = useState<OverviewData | null>(null);
   const [paymentsRes, setPaymentsRes] = useState<PaymentsResponse | null>(null);
-  const [dashData,    setDashData]    = useState<DashboardData | null>(null);
   const [chartSeries, setChartSeries] = useState<ChartPoint[]>([]);
   const [loading,     setLoading]     = useState(true);
   const [refreshing,  setRefreshing]  = useState(false);
   const [lastUpdate,  setLastUpdate]  = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ── SWR: dashboard + onboarding en 1 sola llamada ────────────────────────
+  // dedupingInterval: 30s = no refetch si el usuario navega y vuelve en 30s
+  // revalidateOnFocus: false = no refetch al hacer click en la ventana
+  const { data: initData } = useSWR<InitResponse>("/api/dashboard/init", swrFetcher, {
+    dedupingInterval:  30_000,
+    revalidateOnFocus: false,
+  });
+  const dashData       = initData?.dashboard ?? null;
+  const showOnboarding = initData?.onboarding?.needsOnboarding ?? false;
 
   // ── Filtro de fecha ───────────────────────────────────────────────────────
   const [dateRange, setDateRange] = useState<DateRange>(() => {
@@ -174,15 +196,8 @@ export default function DashboardPage() {
   }
 
   // ── Onboarding modal ──────────────────────────────────────────────────────
-  const [showOnboarding, setShowOnboarding] = useState(false);
-  useEffect(() => {
-    fetch("/api/onboarding/status")
-      .then((r) => r.ok ? r.json() : null)
-      .then((data) => { if (data?.needsOnboarding) setShowOnboarding(true); })
-      .catch(() => {});
-  }, []);
+  // showOnboarding proviene del SWR de initData (ver arriba)
   function handleOnboardingComplete(mode: "test" | "live") {
-    setShowOnboarding(false);
     if (mode === "live") router.push("/app/connect/onboarding");
   }
 
@@ -209,14 +224,10 @@ export default function DashboardPage() {
 
   useEffect(() => { void fetchOverviewAndPayments(false); }, [dateRange]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const fetchDashboard = useCallback(async () => {
-    const dd = await fetch("/api/dashboard").then(r => r.ok ? r.json() as Promise<DashboardData> : null).catch(() => null);
-    if (dd) setDashData(dd);
-  }, []);
-
   useEffect(() => {
-    Promise.all([fetchOverviewAndPayments(true), fetchDashboard()]).finally(() => setLoading(false));
-  }, [fetchOverviewAndPayments, fetchDashboard]);
+    void fetchOverviewAndPayments(true).finally(() => setLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Polling ───────────────────────────────────────────────────────────────
   useEffect(() => {

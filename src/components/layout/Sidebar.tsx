@@ -163,6 +163,7 @@ function NavItemRow({
     <div>
       <Link
         href={item.href}
+        prefetch={!hasKids}
         onClick={hasKids ? (e) => { e.preventDefault(); onToggle(); } : undefined}
         className="flex items-center gap-2 rounded-lg px-2.5 py-[7px] text-[12px] transition-all duration-100"
         style={active
@@ -195,6 +196,7 @@ function NavItemRow({
               <Link
                 key={child.href}
                 href={child.href}
+                prefetch={true}
                 className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-[11.5px] transition-colors duration-100"
                 style={childActive
                   ? { color: theme.sidebarActiveText, fontWeight: 600, background: theme.sidebarActiveBg }
@@ -359,6 +361,7 @@ export function Sidebar() {
       <div className="px-2.5 pb-3 pt-1 border-t" style={{ borderColor: theme.sidebarBorder }}>
         <Link
           href="/app/settings"
+          prefetch={true}
           className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-[11.5px] font-medium transition-colors hover:bg-black/5"
           style={{ color: theme.sidebarMuted }}
         >
