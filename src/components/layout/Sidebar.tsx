@@ -8,9 +8,9 @@ import { usePathname, useRouter } from "next/navigation";
 import {
  LayoutDashboard, Wallet, Users, ExternalLink, RefreshCw,
  ChevronDown, ChevronRight, LogOut, Settings, User, ShieldCheck,
- Package, Cpu, QrCode, Barcode, Phone, Smartphone,
+ Package, QrCode, Barcode, Phone, Smartphone,
  BarChart2, Receipt, FileText, Scale, Database,
- CreditCard, Layers, Code2, Zap, UserCog, Shield, ClipboardList,
+ CreditCard, Layers, Code2, Zap, UserCog, Shield, ClipboardList, AlertOctagon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useBrand } from "@/context/BrandContext";
@@ -61,6 +61,7 @@ const PREFETCH_MAP: Record<string, string[]> = {
  "/app/products": ["/api/products?active=false"],
  "/app/payment-links":["/api/payment-links"],
  "/app/subscriptions":["/api/subscriptions/customers"],
+ "/app/impagos":     ["/api/dashboard/impagos"],
  "/app/invoices": ["/api/dashboard/payments?limit=100", "/api/invoices/manual", "/api/products"],
  "/app/managers": ["/api/dashboard/managers"],
  "/app/settings": ["/api/dashboard/settings/statement-descriptor"],
@@ -100,8 +101,8 @@ const NAV_SECTIONS: NavSection[] = [
  { label: "Importar", href: "/app/subscriptions/import"},
  ],
  },
- { label: "Titan 1.4.1", href: "/app/titan", icon: Cpu },
- {
+      { label: "Impagos", href: "/app/impagos", icon: AlertOctagon },
+      {
  label: "Métodos de Pago",
  href: "/app/payment-methods",
  icon: CreditCard,
