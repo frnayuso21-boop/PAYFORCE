@@ -1,13 +1,13 @@
 "use client";
 
 import {
-  ConnectBalances,
-  ConnectPayouts,
+ ConnectBalances,
+ ConnectPayouts,
 } from "@stripe/react-connect-js";
 import { ConnectProvider } from "./ConnectProvider";
 
 interface EmbeddedPayoutsProps {
-  accountId?: string;
+ accountId?: string;
 }
 
 /**
@@ -17,12 +17,12 @@ interface EmbeddedPayoutsProps {
  * El merchant gestiona sus retiradas directamente en PayForce.
  */
 export function EmbeddedPayouts({ accountId }: EmbeddedPayoutsProps) {
-  return (
-    <ConnectProvider accountId={accountId}>
-      <div className="space-y-6">
-        <ConnectBalances />
-        <ConnectPayouts />
-      </div>
-    </ConnectProvider>
-  );
+ return (
+ <ConnectProvider accountId={accountId}>
+ <div className="space-y-6">
+ <ConnectBalances />
+ <ConnectPayouts />
+ </div>
+ </ConnectProvider>
+ );
 }

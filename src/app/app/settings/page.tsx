@@ -4,952 +4,921 @@ import { useRef, useState, useEffect } from "react";
 import { useStatementDescriptor } from "@/hooks/useDashboard";
 import { Upload, Trash2, Check, Palette, Landmark, ArrowRight, FileText, Loader2, ShoppingBag, Globe, AlertCircle, CheckCircle2, Clock, Bell, BellOff } from "lucide-react";
 import Link from "next/link";
-import { useBrand }       from "@/context/BrandContext";
+import { useBrand } from "@/context/BrandContext";
 import { THEMES, THEME_IDS } from "@/lib/themes";
-import Image              from "next/image";
+import Image from "next/image";
 
-// ─── Preview del tema ──────────────────────────────────────────────────────────
+// Preview del tema 
 
 function ThemeCard({
-  id, current, onSelect,
+ id, current, onSelect,
 }: {
-  id: string; current: boolean; onSelect: () => void;
+ id: string; current: boolean; onSelect: () => void;
 }) {
-  const t = THEMES[id];
+ const t = THEMES[id];
 
-  return (
-    <button
-      onClick={onSelect}
-      className="group relative flex flex-col overflow-hidden rounded-2xl border-2 transition-all duration-150 hover:scale-[1.02]"
-      style={{
-        borderColor: current ? t.accentBg : "transparent",
-        outline: current ? `2px solid ${t.accentBg}` : "none",
-        outlineOffset: "2px",
-      }}
-    >
-      {/* Mini preview del sidebar + contenido */}
-      <div className="flex h-20 overflow-hidden rounded-xl">
-        {/* Sidebar simulado */}
-        <div className="flex w-12 shrink-0 flex-col gap-1.5 px-1.5 py-2" style={{ background: t.sidebarBg }}>
-          <div className="flex h-2.5 w-2.5 rounded-sm" style={{ background: t.accentBg }} />
-          {[1,2,3,4].map((i) => (
-            <div key={i} className="h-1.5 rounded-sm"
-              style={{ background: i === 1 ? t.sidebarActiveBg : t.sidebarBorder, width: `${60 + i * 8}%` }} />
-          ))}
-        </div>
+ return (
+ <button
+ onClick={onSelect}
+ className="group relative flex flex-col overflow-hidden rounded-2xl border-2 transition-all duration-150 hover:scale-[1.02]"style={{
+ borderColor: current ? t.accentBg : "transparent",
+ outline: current ? `2px solid ${t.accentBg}`: "none",
+ outlineOffset: "2px",
+ }}
+ >
+ {/* Mini preview del sidebar + contenido */}
+ <div className="flex h-20 overflow-hidden rounded-xl">
+ {/* Sidebar simulado */}
+ <div className="flex w-12 shrink-0 flex-col gap-1.5 px-1.5 py-2"style={{ background: t.sidebarBg }}>
+ <div className="flex h-2.5 w-2.5 rounded-sm"style={{ background: t.accentBg }} />
+ {[1,2,3,4].map((i) => (
+ <div key={i} className="h-1.5 rounded-sm"style={{ background: i === 1 ? t.sidebarActiveBg : t.sidebarBorder, width: `${60 + i * 8}%`}} />
+ ))}
+ </div>
 
-        {/* Contenido simulado */}
-        <div className="flex flex-1 flex-col gap-1.5 bg-[#f8f9fb] p-2">
-          <div className="flex gap-1.5">
-            {[1,2,3].map((i) => (
-              <div key={i} className="flex-1 rounded-lg bg-white h-8 border border-slate-100" />
-            ))}
-          </div>
-          <div className="flex gap-1.5">
-            <div className="h-5 flex-1 rounded-md bg-white border border-slate-100" />
-            <div className="h-5 w-10 rounded-md" style={{ background: t.accentBg }} />
-          </div>
-        </div>
-      </div>
+ {/* Contenido simulado */}
+ <div className="flex flex-1 flex-col gap-1.5 bg-[#f8f9fb] p-2">
+ <div className="flex gap-1.5">
+ {[1,2,3].map((i) => (
+ <div key={i} className="flex-1 rounded-lg bg-white h-8 border border-slate-100"/>
+ ))}
+ </div>
+ <div className="flex gap-1.5">
+ <div className="h-5 flex-1 rounded-md bg-white border border-slate-100"/>
+ <div className="h-5 w-10 rounded-md"style={{ background: t.accentBg }} />
+ </div>
+ </div>
+ </div>
 
-      {/* Nombre + check */}
-      <div className="flex items-center justify-between px-3 py-2 bg-white">
-        <div className="flex items-center gap-2">
-          <span className="text-base">{t.emoji}</span>
-          <span className="text-[12px] font-semibold text-slate-800">{t.name}</span>
-        </div>
-        {current && (
-          <div className="flex h-5 w-5 items-center justify-center rounded-full"
-            style={{ background: t.accentBg }}>
-            <Check className="h-3 w-3" style={{ color: t.accentText }} />
-          </div>
-        )}
-      </div>
-    </button>
-  );
+ {/* Nombre + check */}
+ <div className="flex items-center justify-between px-3 py-2 bg-white">
+ <div className="flex items-center gap-2">
+ <span className="text-base">{t.emoji}</span>
+ <span className="text-[12px] font-semibold text-slate-800">{t.name}</span>
+ </div>
+ {current && (
+ <div className="flex h-5 w-5 items-center justify-center rounded-full"style={{ background: t.accentBg }}>
+ <Check className="h-3 w-3"style={{ color: t.accentText }} />
+ </div>
+ )}
+ </div>
+ </button>
+ );
 }
 
-// ─── Página principal ──────────────────────────────────────────────────────────
+// Página principal 
 
 function clean(raw: string): string {
-  return raw.toUpperCase().replace(/[^A-Z0-9 ]/g, "").substring(0, 22);
+ return raw.toUpperCase().replace(/[^A-Z0-9 ]/g, "").substring(0, 22);
 }
 
 export default function SettingsPage() {
-  const {
-    logoUrl, brandName, primaryColor, themeId,
-    setLogoUrl, setBrandName, setPrimaryColor, setThemeId, theme,
-  } = useBrand();
+ const {
+ logoUrl, brandName, primaryColor, themeId,
+ setLogoUrl, setBrandName, setPrimaryColor, setThemeId, theme,
+ } = useBrand();
 
-  const fileInputRef  = useRef<HTMLInputElement>(null);
-  const [saved, setSaved] = useState(false);
+ const fileInputRef = useRef<HTMLInputElement>(null);
+ const [saved, setSaved] = useState(false);
 
-  // ── Checkout personalization ──────────────────────────────────────────────
-  const [ckColor,      setCkColor]      = useState("#0A0A0A");
-  const [ckLogo,       setCkLogo]       = useState("");
-  const [ckSaving,     setCkSaving]     = useState(false);
-  const [ckMsg,        setCkMsg]        = useState<{ ok: boolean; text: string } | null>(null);
-  const [ckLoaded,     setCkLoaded]     = useState(false);
-  const [logoPreview,  setLogoPreview]  = useState<string | null>(null);
-  const [logoUploading,setLogoUploading]= useState(false);
+ // Checkout personalization 
+ const [ckColor, setCkColor] = useState("#0A0A0A");
+ const [ckLogo, setCkLogo] = useState("");
+ const [ckSaving, setCkSaving] = useState(false);
+ const [ckMsg, setCkMsg] = useState<{ ok: boolean; text: string } | null>(null);
+ const [ckLoaded, setCkLoaded] = useState(false);
+ const [logoPreview, setLogoPreview] = useState<string | null>(null);
+ const [logoUploading,setLogoUploading]= useState(false);
 
-  useEffect(() => {
-    fetch("/api/settings/store")
-      .then((r) => r.json())
-      .then((d: { primaryColor?: string; logoUrl?: string }) => {
-        if (d.primaryColor) setCkColor(d.primaryColor);
-        if (d.logoUrl) {
-          setCkLogo(d.logoUrl);
-          setLogoPreview(d.logoUrl);
-        }
-        setCkLoaded(true);
-      })
-      .catch(() => setCkLoaded(true));
-  }, []);
+ useEffect(() => {
+ fetch("/api/settings/store")
+ .then((r) => r.json())
+ .then((d: { primaryColor?: string; logoUrl?: string }) => {
+ if (d.primaryColor) setCkColor(d.primaryColor);
+ if (d.logoUrl) {
+ setCkLogo(d.logoUrl);
+ setLogoPreview(d.logoUrl);
+ }
+ setCkLoaded(true);
+ })
+ .catch(() => setCkLoaded(true));
+ }, []);
 
-  async function handleLogoUpload(file: File) {
-    if (!file.type.startsWith("image/")) {
-      alert("Solo se aceptan imágenes");
-      return;
-    }
-    if (file.size > 2 * 1024 * 1024) {
-      alert("Máximo 2MB");
-      return;
-    }
+ async function handleLogoUpload(file: File) {
+ if (!file.type.startsWith("image/")) {
+ alert("Solo se aceptan imágenes");
+ return;
+ }
+ if (file.size > 2 * 1024 * 1024) {
+ alert("Máximo 2MB");
+ return;
+ }
 
-    // Preview inmediato con base64
-    const reader = new FileReader();
-    reader.onload = (e) => setLogoPreview(e.target?.result as string);
-    reader.readAsDataURL(file);
+ // Preview inmediato con base64
+ const reader = new FileReader();
+ reader.onload = (e) => setLogoPreview(e.target?.result as string);
+ reader.readAsDataURL(file);
 
-    setLogoUploading(true);
-    setCkMsg(null);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
+ setLogoUploading(true);
+ setCkMsg(null);
+ try {
+ const formData = new FormData();
+ formData.append("file", file);
 
-      const res  = await fetch("/api/dashboard/settings/upload-logo", {
-        method:      "POST",
-        body:        formData,
-        credentials: "include",
-        // Sin Content-Type — el navegador lo añade automáticamente con el boundary correcto
-      });
-      const data = await res.json() as { url?: string; error?: string };
+ const res = await fetch("/api/dashboard/settings/upload-logo", {
+ method: "POST",
+ body: formData,
+ credentials: "include",
+ // Sin Content-Type — el navegador lo añade automáticamente con el boundary correcto
+ });
+ const data = await res.json() as { url?: string; error?: string };
 
-      if (!res.ok || !data.url) {
-        setCkMsg({ ok: false, text: data.error ?? "Error al subir el logo." });
-        return;
-      }
+ if (!res.ok || !data.url) {
+ setCkMsg({ ok: false, text: data.error ?? "Error al subir el logo."});
+ return;
+ }
 
-      setCkLogo(data.url);
-      setLogoPreview(data.url);
-      setCkMsg({ ok: true, text: "Logo subido correctamente." });
-    } catch {
-      setCkMsg({ ok: false, text: "Error de red al subir el logo." });
-    } finally {
-      setLogoUploading(false);
-    }
-  }
+ setCkLogo(data.url);
+ setLogoPreview(data.url);
+ setCkMsg({ ok: true, text: "Logo subido correctamente."});
+ } catch {
+ setCkMsg({ ok: false, text: "Error de red al subir el logo."});
+ } finally {
+ setLogoUploading(false);
+ }
+ }
 
-  async function saveCkSettings() {
-    setCkSaving(true);
-    setCkMsg(null);
-    try {
-      const r = await fetch("/api/settings/store", {
-        method:  "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({
-          primaryColor: ckColor,
-          logoUrl:      ckLogo || "",
-        }),
-      });
-      const d = await r.json();
-      if (r.ok) {
-        setCkMsg({ ok: true, text: "Configuración del checkout guardada." });
-      } else {
-        setCkMsg({ ok: false, text: (d as { error?: string }).error ?? "Error al guardar." });
-      }
-    } catch {
-      setCkMsg({ ok: false, text: "Error de red." });
-    } finally {
-      setCkSaving(false);
-    }
-  }
+ async function saveCkSettings() {
+ setCkSaving(true);
+ setCkMsg(null);
+ try {
+ const r = await fetch("/api/settings/store", {
+ method: "PATCH",
+ headers: { "Content-Type": "application/json"},
+ body: JSON.stringify({
+ primaryColor: ckColor,
+ logoUrl: ckLogo || "",
+ }),
+ });
+ const d = await r.json();
+ if (r.ok) {
+ setCkMsg({ ok: true, text: "Configuración del checkout guardada."});
+ } else {
+ setCkMsg({ ok: false, text: (d as { error?: string }).error ?? "Error al guardar."});
+ }
+ } catch {
+ setCkMsg({ ok: false, text: "Error de red."});
+ } finally {
+ setCkSaving(false);
+ }
+ }
 
-  // ── Dominio personalizado ─────────────────────────────────────────────────
-  const [domainInput,    setDomainInput]    = useState("");
-  const [domainData,     setDomainData]     = useState<{
-    customDomain: string | null;
-    customDomainVerified: boolean;
-    customDomainAddedAt: string | null;
-    dnsRecord: { type: string; name: string; value: string };
-  } | null>(null);
-  const [domainLoading,  setDomainLoading]  = useState(true);
-  const [domainSaving,   setDomainSaving]   = useState(false);
-  const [domainVerifying,setDomainVerifying]= useState(false);
-  const [domainDeleting, setDomainDeleting] = useState(false);
-  const [domainMsg,      setDomainMsg]      = useState<{ ok: boolean; text: string } | null>(null);
+ // Dominio personalizado 
+ const [domainInput, setDomainInput] = useState("");
+ const [domainData, setDomainData] = useState<{
+ customDomain: string | null;
+ customDomainVerified: boolean;
+ customDomainAddedAt: string | null;
+ dnsRecord: { type: string; name: string; value: string };
+ } | null>(null);
+ const [domainLoading, setDomainLoading] = useState(true);
+ const [domainSaving, setDomainSaving] = useState(false);
+ const [domainVerifying,setDomainVerifying]= useState(false);
+ const [domainDeleting, setDomainDeleting] = useState(false);
+ const [domainMsg, setDomainMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  useEffect(() => {
-    fetch("/api/dashboard/settings/custom-domain")
-      .then((r) => r.json())
-      .then((d) => { setDomainData(d); setDomainLoading(false); })
-      .catch(() => setDomainLoading(false));
-  }, []);
+ useEffect(() => {
+ fetch("/api/dashboard/settings/custom-domain")
+ .then((r) => r.json())
+ .then((d) => { setDomainData(d); setDomainLoading(false); })
+ .catch(() => setDomainLoading(false));
+ }, []);
 
-  async function addDomain() {
-    if (!domainInput.trim()) return;
-    setDomainSaving(true);
-    setDomainMsg(null);
-    try {
-      const r = await fetch("/api/dashboard/settings/custom-domain", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ domain: domainInput.trim() }),
-      });
-      const d = await r.json() as { ok?: boolean; error?: string; domain?: string; dnsRecord?: { type: string; name: string; value: string } };
-      if (r.ok && d.ok) {
-        setDomainData((prev) => ({
-          ...prev!,
-          customDomain:         d.domain ?? domainInput.trim(),
-          customDomainVerified: false,
-          customDomainAddedAt:  new Date().toISOString(),
-          dnsRecord:            d.dnsRecord ?? prev!.dnsRecord,
-        }));
-        setDomainInput("");
-        setDomainMsg({ ok: true, text: "Dominio añadido. Configura el DNS y pulsa 'Verificar'." });
-      } else {
-        setDomainMsg({ ok: false, text: d.error ?? "Error al añadir el dominio." });
-      }
-    } catch {
-      setDomainMsg({ ok: false, text: "Error de red." });
-    } finally {
-      setDomainSaving(false);
-    }
-  }
+ async function addDomain() {
+ if (!domainInput.trim()) return;
+ setDomainSaving(true);
+ setDomainMsg(null);
+ try {
+ const r = await fetch("/api/dashboard/settings/custom-domain", {
+ method: "POST",
+ headers: { "Content-Type": "application/json"},
+ body: JSON.stringify({ domain: domainInput.trim() }),
+ });
+ const d = await r.json() as { ok?: boolean; error?: string; domain?: string; dnsRecord?: { type: string; name: string; value: string } };
+ if (r.ok && d.ok) {
+ setDomainData((prev) => ({
+ ...prev!,
+ customDomain: d.domain ?? domainInput.trim(),
+ customDomainVerified: false,
+ customDomainAddedAt: new Date().toISOString(),
+ dnsRecord: d.dnsRecord ?? prev!.dnsRecord,
+ }));
+ setDomainInput("");
+ setDomainMsg({ ok: true, text: "Dominio añadido. Configura el DNS y pulsa 'Verificar'."});
+ } else {
+ setDomainMsg({ ok: false, text: d.error ?? "Error al añadir el dominio."});
+ }
+ } catch {
+ setDomainMsg({ ok: false, text: "Error de red."});
+ } finally {
+ setDomainSaving(false);
+ }
+ }
 
-  async function verifyDomain() {
-    setDomainVerifying(true);
-    setDomainMsg(null);
-    try {
-      const r = await fetch("/api/dashboard/settings/custom-domain", { method: "PATCH" });
-      const d = await r.json() as { verified?: boolean; hint?: string; error?: string };
-      if (d.verified) {
-        setDomainData((prev) => prev ? { ...prev, customDomainVerified: true } : prev);
-        setDomainMsg({ ok: true, text: "¡Dominio verificado! Tus links de pago ya usan tu dominio." });
-      } else {
-        setDomainMsg({ ok: false, text: d.hint ?? d.error ?? "DNS aún no propagado. Inténtalo en unos minutos." });
-      }
-    } catch {
-      setDomainMsg({ ok: false, text: "Error de red." });
-    } finally {
-      setDomainVerifying(false);
-    }
-  }
+ async function verifyDomain() {
+ setDomainVerifying(true);
+ setDomainMsg(null);
+ try {
+ const r = await fetch("/api/dashboard/settings/custom-domain", { method: "PATCH"});
+ const d = await r.json() as { verified?: boolean; hint?: string; error?: string };
+ if (d.verified) {
+ setDomainData((prev) => prev ? { ...prev, customDomainVerified: true } : prev);
+ setDomainMsg({ ok: true, text: "¡Dominio verificado! Tus links de pago ya usan tu dominio."});
+ } else {
+ setDomainMsg({ ok: false, text: d.hint ?? d.error ?? "DNS aún no propagado. Inténtalo en unos minutos."});
+ }
+ } catch {
+ setDomainMsg({ ok: false, text: "Error de red."});
+ } finally {
+ setDomainVerifying(false);
+ }
+ }
 
-  async function deleteDomain() {
-    if (!confirm("¿Eliminar el dominio personalizado? Tus links volverán a usar payforce.co")) return;
-    setDomainDeleting(true);
-    setDomainMsg(null);
-    try {
-      const r = await fetch("/api/dashboard/settings/custom-domain", { method: "DELETE" });
-      if (r.ok) {
-        setDomainData((prev) => prev ? { ...prev, customDomain: null, customDomainVerified: false, customDomainAddedAt: null } : prev);
-        setDomainMsg({ ok: true, text: "Dominio eliminado." });
-      } else {
-        setDomainMsg({ ok: false, text: "Error al eliminar el dominio." });
-      }
-    } catch {
-      setDomainMsg({ ok: false, text: "Error de red." });
-    } finally {
-      setDomainDeleting(false);
-    }
-  }
+ async function deleteDomain() {
+ if (!confirm("¿Eliminar el dominio personalizado? Tus links volverán a usar payforce.co")) return;
+ setDomainDeleting(true);
+ setDomainMsg(null);
+ try {
+ const r = await fetch("/api/dashboard/settings/custom-domain", { method: "DELETE"});
+ if (r.ok) {
+ setDomainData((prev) => prev ? { ...prev, customDomain: null, customDomainVerified: false, customDomainAddedAt: null } : prev);
+ setDomainMsg({ ok: true, text: "Dominio eliminado."});
+ } else {
+ setDomainMsg({ ok: false, text: "Error al eliminar el dominio."});
+ }
+ } catch {
+ setDomainMsg({ ok: false, text: "Error de red."});
+ } finally {
+ setDomainDeleting(false);
+ }
+ }
 
-  // ── Extracto bancario ──────────────────────────────────────────────────────
-  const [descriptor,     setDescriptor]     = useState("");
-  const [savedDescriptor,setSavedDescriptor]= useState("");
-  const [descSaving,     setDescSaving]     = useState(false);
-  const [descMsg,        setDescMsg]        = useState<{ ok: boolean; text: string } | null>(null);
+ // Extracto bancario 
+ const [descriptor, setDescriptor] = useState("");
+ const [savedDescriptor,setSavedDescriptor]= useState("");
+ const [descSaving, setDescSaving] = useState(false);
+ const [descMsg, setDescMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const { data: descData, isLoading: descLoading } = useStatementDescriptor();
-  useEffect(() => {
-    if (descData?.statementDescriptor) {
-      setDescriptor(descData.statementDescriptor);
-      setSavedDescriptor(descData.statementDescriptor);
-    }
-  }, [descData]);
+ const { data: descData, isLoading: descLoading } = useStatementDescriptor();
+ useEffect(() => {
+ if (descData?.statementDescriptor) {
+ setDescriptor(descData.statementDescriptor);
+ setSavedDescriptor(descData.statementDescriptor);
+ }
+ }, [descData]);
 
-  function handleDescriptorChange(val: string) {
-    setDescriptor(clean(val));
-    setDescMsg(null);
-  }
+ function handleDescriptorChange(val: string) {
+ setDescriptor(clean(val));
+ setDescMsg(null);
+ }
 
-  async function saveDescriptor() {
-    setDescSaving(true);
-    setDescMsg(null);
-    try {
-      const r = await fetch("/api/dashboard/settings/statement-descriptor", {
-        method:  "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ statementDescriptor: descriptor }),
-      });
-      const d = await r.json();
-      if (r.ok) {
-        setSavedDescriptor(d.statementDescriptor);
-        setDescriptor(d.statementDescriptor);
-        setDescMsg({ ok: true, text: "Extracto guardado correctamente." });
-      } else {
-        setDescMsg({ ok: false, text: d.error ?? "Error al guardar." });
-      }
-    } catch {
-      setDescMsg({ ok: false, text: "Error de red." });
-    } finally {
-      setDescSaving(false);
-    }
-  }
+ async function saveDescriptor() {
+ setDescSaving(true);
+ setDescMsg(null);
+ try {
+ const r = await fetch("/api/dashboard/settings/statement-descriptor", {
+ method: "PATCH",
+ headers: { "Content-Type": "application/json"},
+ body: JSON.stringify({ statementDescriptor: descriptor }),
+ });
+ const d = await r.json();
+ if (r.ok) {
+ setSavedDescriptor(d.statementDescriptor);
+ setDescriptor(d.statementDescriptor);
+ setDescMsg({ ok: true, text: "Extracto guardado correctamente."});
+ } else {
+ setDescMsg({ ok: false, text: d.error ?? "Error al guardar."});
+ }
+ } catch {
+ setDescMsg({ ok: false, text: "Error de red."});
+ } finally {
+ setDescSaving(false);
+ }
+ }
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => setLogoUrl(ev.target?.result as string);
-    reader.readAsDataURL(file);
-  }
+ function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+ const file = e.target.files?.[0];
+ if (!file) return;
+ const reader = new FileReader();
+ reader.onload = (ev) => setLogoUrl(ev.target?.result as string);
+ reader.readAsDataURL(file);
+ }
 
-  function handleSave() {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  }
+ function handleSave() {
+ setSaved(true);
+ setTimeout(() => setSaved(false), 2000);
+ }
 
-  return (
-    <div className="max-w-2xl space-y-8 p-8">
-      <div>
-        <h1 className="text-[22px] font-bold text-slate-900">Configuración</h1>
-        <p className="mt-1 text-[13px] text-slate-400">Personaliza la apariencia visual de tu plataforma</p>
-      </div>
+ return (
+ <div className="max-w-2xl space-y-8 p-8">
+ <div>
+ <h1 className="text-[22px] font-bold text-slate-900">Configuración</h1>
+ <p className="mt-1 text-[13px] text-slate-400">Personaliza la apariencia visual de tu plataforma</p>
+ </div>
 
-      {/* ── Temas ─────────────────────────────────────────────────────────── */}
-      <section className="rounded-2xl border border-slate-100 bg-white p-6 space-y-5">
-        <div className="flex items-center gap-2">
-          <Palette className="h-4 w-4 text-slate-400" />
-          <h2 className="text-[13px] font-bold uppercase tracking-widest text-slate-400">
-            Plantillas y temas
-          </h2>
-        </div>
-        <p className="text-[12px] text-slate-400 -mt-2">
-          Elige el estilo visual de tu dashboard, sidebar y app móvil. El cambio se aplica al instante.
-        </p>
+ {/* Temas */}
+ <section className="rounded-2xl border border-slate-100 bg-white p-6 space-y-5">
+ <div className="flex items-center gap-2">
+ <Palette className="h-4 w-4 text-slate-400"/>
+ <h2 className="text-[13px] font-bold uppercase tracking-widest text-slate-400">
+ Plantillas y temas
+ </h2>
+ </div>
+ <p className="text-[12px] text-slate-400 -mt-2">
+ Elige el estilo visual de tu dashboard, sidebar y app móvil. El cambio se aplica al instante.
+ </p>
 
-        {/* Preview en tiempo real */}
-        <div className="rounded-xl border border-slate-100 overflow-hidden mb-1">
-          <div className="flex h-24">
-            {/* Sidebar preview */}
-            <div className="flex w-16 shrink-0 flex-col gap-2 px-2 py-2.5 transition-all duration-300"
-              style={{ background: theme.sidebarBg }}>
-              <div className="flex items-center gap-1">
-                <div className="h-3 w-3 rounded-sm transition-all" style={{ background: theme.accentBg }} />
-                <div className="h-2 flex-1 rounded-sm" style={{ background: theme.sidebarText, opacity: 0.4 }} />
-              </div>
-              {[80,65,75,55].map((w, i) => (
-                <div key={i} className="h-2 rounded-sm transition-all"
-                  style={{
-                    width: `${w}%`,
-                    background: i === 0 ? theme.sidebarActiveBg : theme.sidebarBorder,
-                  }} />
-              ))}
-            </div>
-            {/* Contenido */}
-            <div className="flex flex-1 flex-col gap-2 bg-[#f8f9fb] p-3">
-              <div className="flex gap-2">
-                {[1,2,3].map((i) => (
-                  <div key={i} className="flex-1 rounded-xl bg-white border border-slate-100 h-10" />
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <div className="h-6 flex-1 rounded-lg bg-white border border-slate-100" />
-                <div className="h-6 w-14 rounded-lg transition-all"
-                  style={{ background: theme.accentBg }} />
-              </div>
-            </div>
-          </div>
-        </div>
+ {/* Preview en tiempo real */}
+ <div className="rounded-xl border border-slate-100 overflow-hidden mb-1">
+ <div className="flex h-24">
+ {/* Sidebar preview */}
+ <div className="flex w-16 shrink-0 flex-col gap-2 px-2 py-2.5 transition-all duration-300"style={{ background: theme.sidebarBg }}>
+ <div className="flex items-center gap-1">
+ <div className="h-3 w-3 rounded-sm transition-all"style={{ background: theme.accentBg }} />
+ <div className="h-2 flex-1 rounded-sm"style={{ background: theme.sidebarText, opacity: 0.4 }} />
+ </div>
+ {[80,65,75,55].map((w, i) => (
+ <div key={i} className="h-2 rounded-sm transition-all"style={{
+ width: `${w}%`,
+ background: i === 0 ? theme.sidebarActiveBg : theme.sidebarBorder,
+ }} />
+ ))}
+ </div>
+ {/* Contenido */}
+ <div className="flex flex-1 flex-col gap-2 bg-[#f8f9fb] p-3">
+ <div className="flex gap-2">
+ {[1,2,3].map((i) => (
+ <div key={i} className="flex-1 rounded-xl bg-white border border-slate-100 h-10"/>
+ ))}
+ </div>
+ <div className="flex gap-2">
+ <div className="h-6 flex-1 rounded-lg bg-white border border-slate-100"/>
+ <div className="h-6 w-14 rounded-lg transition-all"style={{ background: theme.accentBg }} />
+ </div>
+ </div>
+ </div>
+ </div>
 
-        {/* Grid de temas */}
-        <div className="grid grid-cols-3 gap-3">
-          {THEME_IDS.map((id) => (
-            <ThemeCard
-              key={id}
-              id={id}
-              current={themeId === id}
-              onSelect={() => setThemeId(id)}
-            />
-          ))}
-        </div>
-      </section>
+ {/* Grid de temas */}
+ <div className="grid grid-cols-3 gap-3">
+ {THEME_IDS.map((id) => (
+ <ThemeCard
+ key={id}
+ id={id}
+ current={themeId === id}
+ onSelect={() => setThemeId(id)}
+ />
+ ))}
+ </div>
+ </section>
 
-      {/* ── Identidad de marca ─────────────────────────────────────────────── */}
-      <section className="rounded-2xl border border-slate-100 bg-white p-6 space-y-6">
-        <h2 className="text-[13px] font-bold uppercase tracking-widest text-slate-400">
-          Identidad de marca
-        </h2>
+ {/* Identidad de marca */}
+ <section className="rounded-2xl border border-slate-100 bg-white p-6 space-y-6">
+ <h2 className="text-[13px] font-bold uppercase tracking-widest text-slate-400">
+ Identidad de marca
+ </h2>
 
-        {/* Logo */}
-        <div className="space-y-3">
-          <label className="text-[13px] font-medium text-slate-700">Logo</label>
-          <div className="flex items-center gap-4">
-            <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-dashed border-slate-200 bg-slate-50">
-              {logoUrl ? (
-                <Image src={logoUrl} alt="Logo" width={80} height={80}
-                  className="h-full w-full object-contain" unoptimized />
-              ) : (
-                <span className="text-[10px] text-slate-300">Sin logo</span>
-              )}
-            </div>
-            <div className="space-y-2">
-              <button onClick={() => fileInputRef.current?.click()}
-                className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-[13px] font-medium text-slate-700 hover:bg-slate-50 transition-colors">
-                <Upload className="h-3.5 w-3.5" />
-                {logoUrl ? "Cambiar imagen" : "Subir imagen"}
-              </button>
-              {logoUrl && (
-                <button onClick={() => setLogoUrl(null)}
-                  className="flex items-center gap-2 rounded-lg px-4 py-2 text-[13px] font-medium text-red-400 hover:bg-red-50 transition-colors">
-                  <Trash2 className="h-3.5 w-3.5" /> Eliminar logo
-                </button>
-              )}
-              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
-            </div>
-          </div>
-          <p className="text-[11px] text-slate-400">PNG, JPG o SVG. Se mostrará en el sidebar.</p>
-        </div>
+ {/* Logo */}
+ <div className="space-y-3">
+ <label className="text-[13px] font-medium text-slate-700">Logo</label>
+ <div className="flex items-center gap-4">
+ <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-dashed border-slate-200 bg-slate-50">
+ {logoUrl ? (
+ <Image src={logoUrl} alt="Logo"width={80} height={80}
+ className="h-full w-full object-contain"unoptimized />
+ ) : (
+ <span className="text-[10px] text-slate-300">Sin logo</span>
+ )}
+ </div>
+ <div className="space-y-2">
+ <button onClick={() => fileInputRef.current?.click()}
+ className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-[13px] font-medium text-slate-700 hover:bg-slate-50 transition-colors">
+ <Upload className="h-3.5 w-3.5"/>
+ {logoUrl ? "Cambiar imagen": "Subir imagen"}
+ </button>
+ {logoUrl && (
+ <button onClick={() => setLogoUrl(null)}
+ className="flex items-center gap-2 rounded-lg px-4 py-2 text-[13px] font-medium text-red-400 hover:bg-red-50 transition-colors">
+ <Trash2 className="h-3.5 w-3.5"/> Eliminar logo
+ </button>
+ )}
+ <input ref={fileInputRef} type="file"accept="image/*"className="hidden"onChange={handleFileChange} />
+ </div>
+ </div>
+ <p className="text-[11px] text-slate-400">PNG, JPG o SVG. Se mostrará en el sidebar.</p>
+ </div>
 
-        {/* Nombre */}
-        <div className="space-y-2">
-          <label className="text-[13px] font-medium text-slate-700">Nombre de la plataforma</label>
-          <input type="text" value={brandName} onChange={(e) => setBrandName(e.target.value)}
-            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-[13px] text-slate-800 outline-none focus:border-slate-400 focus:bg-white transition" />
-        </div>
+ {/* Nombre */}
+ <div className="space-y-2">
+ <label className="text-[13px] font-medium text-slate-700">Nombre de la plataforma</label>
+ <input type="text"value={brandName} onChange={(e) => setBrandName(e.target.value)}
+ className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-[13px] text-slate-800 outline-none focus:border-slate-400 focus:bg-white transition"/>
+ </div>
 
-        {/* Color custom (override del tema) */}
-        <div className="space-y-2">
-          <label className="text-[13px] font-medium text-slate-700">Color de acento personalizado</label>
-          <div className="flex items-center gap-3">
-            <input type="color" value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)}
-              className="h-10 w-10 cursor-pointer rounded-lg border border-slate-200 bg-white p-1" />
-            <span className="font-mono text-[13px] text-slate-500">{primaryColor}</span>
-          </div>
-          <p className="text-[11px] text-slate-400">
-            Este color es independiente del tema — puedes usarlo en tus elementos personalizados.
-          </p>
-        </div>
-      </section>
+ {/* Color custom (override del tema) */}
+ <div className="space-y-2">
+ <label className="text-[13px] font-medium text-slate-700">Color de acento personalizado</label>
+ <div className="flex items-center gap-3">
+ <input type="color"value={primaryColor} onChange={(e) => setPrimaryColor(e.target.value)}
+ className="h-10 w-10 cursor-pointer rounded-lg border border-slate-200 bg-white p-1"/>
+ <span className="font-mono text-[13px] text-slate-500">{primaryColor}</span>
+ </div>
+ <p className="text-[11px] text-slate-400">
+ Este color es independiente del tema — puedes usarlo en tus elementos personalizados.
+ </p>
+ </div>
+ </section>
 
-      <div className="flex justify-end">
-        <button onClick={handleSave}
-          className="flex items-center gap-2 rounded-xl px-6 py-2.5 text-[13px] font-semibold text-white transition-colors"
-          style={{ background: theme.accentBg }}>
-          {saved ? <><Check className="h-4 w-4" /> Guardado</> : "Guardar cambios"}
-        </button>
-      </div>
+ <div className="flex justify-end">
+ <button onClick={handleSave}
+ className="flex items-center gap-2 rounded-xl px-6 py-2.5 text-[13px] font-semibold text-white transition-colors"style={{ background: theme.accentBg }}>
+ {saved ? <><Check className="h-4 w-4"/> Guardado</> : "Guardar cambios"}
+ </button>
+ </div>
 
-      {/* ── Personalización del checkout ─────────────────────────────────── */}
-      <section className="rounded-2xl border border-slate-100 bg-white p-6 space-y-5">
-        <div className="flex items-center gap-2">
-          <ShoppingBag className="h-4 w-4 text-slate-400" />
-          <h2 className="text-[13px] font-bold uppercase tracking-widest text-slate-400">
-            Personalización del checkout
-          </h2>
-        </div>
-        <p className="text-[12px] text-slate-400 -mt-2">
-          Estos valores aparecen en la pasarela de pago que ven tus clientes al pagar.
-        </p>
+ {/* Personalización del checkout */}
+ <section className="rounded-2xl border border-slate-100 bg-white p-6 space-y-5">
+ <div className="flex items-center gap-2">
+ <ShoppingBag className="h-4 w-4 text-slate-400"/>
+ <h2 className="text-[13px] font-bold uppercase tracking-widest text-slate-400">
+ Personalización del checkout
+ </h2>
+ </div>
+ <p className="text-[12px] text-slate-400 -mt-2">
+ Estos valores aparecen en la pasarela de pago que ven tus clientes al pagar.
+ </p>
 
-        {!ckLoaded ? (
-          <div className="space-y-3">
-            <div className="h-10 w-full animate-pulse rounded-xl bg-slate-100" />
-            <div className="h-10 w-full animate-pulse rounded-xl bg-slate-100" />
-          </div>
-        ) : (
-          <div className="space-y-5">
-            {/* Color del checkout */}
-            <div className="space-y-2">
-              <label className="text-[13px] font-medium text-slate-700">Color principal del checkout</label>
-              <div className="flex items-center gap-3">
-                <input
-                  type="color"
-                  value={ckColor}
-                  onChange={(e) => setCkColor(e.target.value)}
-                  className="h-10 w-10 cursor-pointer rounded-lg border border-slate-200 bg-white p-1"
-                />
-                <span className="font-mono text-[13px] text-slate-500">{ckColor}</span>
-              </div>
-              <p className="text-[11px] text-slate-400">
-                Controla el color del header, botón de pago y pantalla de carga.
-              </p>
-            </div>
+ {!ckLoaded ? (
+ <div className="space-y-3">
+ <div className="h-10 w-full animate-pulse rounded-xl bg-slate-100"/>
+ <div className="h-10 w-full animate-pulse rounded-xl bg-slate-100"/>
+ </div>
+ ) : (
+ <div className="space-y-5">
+ {/* Color del checkout */}
+ <div className="space-y-2">
+ <label className="text-[13px] font-medium text-slate-700">Color principal del checkout</label>
+ <div className="flex items-center gap-3">
+ <input
+ type="color"value={ckColor}
+ onChange={(e) => setCkColor(e.target.value)}
+ className="h-10 w-10 cursor-pointer rounded-lg border border-slate-200 bg-white p-1"/>
+ <span className="font-mono text-[13px] text-slate-500">{ckColor}</span>
+ </div>
+ <p className="text-[11px] text-slate-400">
+ Controla el color del header, botón de pago y pantalla de carga.
+ </p>
+ </div>
 
-            {/* Logo URL */}
-            <div className="space-y-2">
-              <label className="text-[13px] font-medium text-slate-700">URL del logo (para el checkout)</label>
-              <input
-                type="url"
-                value={ckLogo}
-                onChange={(e) => setCkLogo(e.target.value)}
-                placeholder="https://tu-dominio.com/logo.png"
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-[13px] text-slate-800 outline-none focus:border-slate-400 focus:bg-white transition"
-              />
-              <p className="text-[11px] text-slate-400">
-                Imagen PNG, JPG o SVG pública. Aparece en el header y pantalla de carga.
-              </p>
-            </div>
+ {/* Logo URL */}
+ <div className="space-y-2">
+ <label className="text-[13px] font-medium text-slate-700">URL del logo (para el checkout)</label>
+ <input
+ type="url"value={ckLogo}
+ onChange={(e) => setCkLogo(e.target.value)}
+ placeholder="https://tu-dominio.com/logo.png"className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-[13px] text-slate-800 outline-none focus:border-slate-400 focus:bg-white transition"/>
+ <p className="text-[11px] text-slate-400">
+ Imagen PNG, JPG o SVG pública. Aparece en el header y pantalla de carga.
+ </p>
+ </div>
 
-            {/* Vista previa del header */}
-            <div className="space-y-2">
-              <p className="text-[12px] font-medium text-slate-600">Vista previa del checkout</p>
-              <div style={{ borderRadius: "12px", overflow: "hidden", border: "0.5px solid #E5E7EB" }}>
-                {/* Header preview */}
-                <div style={{
-                  background: ckColor,
-                  padding: "12px 16px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    {ckLogo ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={ckLogo} alt="logo" style={{ height: "22px", maxWidth: "100px", objectFit: "contain" }} />
-                    ) : (
-                      <div style={{
-                        width: "22px", height: "22px", borderRadius: "6px",
-                        background: "rgba(255,255,255,0.2)",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                      }}>
-                        <svg width="12" height="12" viewBox="0 0 28 28" fill="none">
-                          <path d="M14 2L25.5 8.5V21.5L14 28L2.5 21.5V8.5L14 2Z" fill="white" />
-                        </svg>
-                      </div>
-                    )}
-                    <span style={{ fontSize: "12px", fontWeight: 500, color: "#fff" }}>Tu empresa</span>
-                  </div>
-                  <span style={{ fontSize: "9px", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                    Pago seguro
-                  </span>
-                </div>
-                {/* Content preview */}
-                <div style={{ background: "#F9FAFB", padding: "12px 16px" }}>
-                  <div style={{ background: "#fff", borderRadius: "8px", border: "0.5px solid #E5E7EB", padding: "10px 12px", marginBottom: "8px" }}>
-                    <div style={{ width: "50px", height: "8px", background: "#F3F4F6", borderRadius: "4px", marginBottom: "6px" }} />
-                    <div style={{ width: "80px", height: "16px", background: "#1F2937", borderRadius: "4px", opacity: 0.7 }} />
-                  </div>
-                  <div style={{ background: "#fff", borderRadius: "8px", border: "0.5px solid #E5E7EB", padding: "10px 12px" }}>
-                    <div style={{ width: "100%", height: "8px", background: "#F3F4F6", borderRadius: "4px", marginBottom: "6px" }} />
-                    <div style={{ width: "100%", height: "28px", background: ckColor, borderRadius: "6px", opacity: 0.9 }} />
-                  </div>
-                </div>
-                {/* Footer preview */}
-                <div style={{
-                  background: "#fff", borderTop: "0.5px solid #F3F4F6",
-                  padding: "6px 16px", display: "flex", justifyContent: "space-between",
-                }}>
-                  <span style={{ fontSize: "8px", color: "#D1D5DB", textTransform: "uppercase", letterSpacing: "0.04em" }}>⬡ PayForce</span>
-                  <span style={{ fontSize: "8px", color: "#D1D5DB", textTransform: "uppercase", letterSpacing: "0.04em" }}>PCI DSS · SSL 256-bit</span>
-                </div>
-              </div>
-            </div>
+ {/* Vista previa del header */}
+ <div className="space-y-2">
+ <p className="text-[12px] font-medium text-slate-600">Vista previa del checkout</p>
+ <div style={{ borderRadius: "12px", overflow: "hidden", border: "0.5px solid #E5E7EB"}}>
+ {/* Header preview */}
+ <div style={{
+ background: ckColor,
+ padding: "12px 16px",
+ display: "flex",
+ alignItems: "center",
+ justifyContent: "space-between",
+ }}>
+ <div style={{ display: "flex", alignItems: "center", gap: "8px"}}>
+ {ckLogo ? (
+ // eslint-disable-next-line @next/next/no-img-element
+ <img src={ckLogo} alt="logo"style={{ height: "22px", maxWidth: "100px", objectFit: "contain"}} />
+ ) : (
+ <div style={{
+ width: "22px", height: "22px", borderRadius: "6px",
+ background: "rgba(255,255,255,0.2)",
+ display: "flex", alignItems: "center", justifyContent: "center",
+ }}>
+ <svg width="12"height="12"viewBox="0 0 28 28"fill="none">
+ <path d="M14 2L25.5 8.5V21.5L14 28L2.5 21.5V8.5L14 2Z"fill="white"/>
+ </svg>
+ </div>
+ )}
+ <span style={{ fontSize: "12px", fontWeight: 500, color: "#fff"}}>Tu empresa</span>
+ </div>
+ <span style={{ fontSize: "9px", color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: "0.04em"}}>
+ Pago seguro
+ </span>
+ </div>
+ {/* Content preview */}
+ <div style={{ background: "#F9FAFB", padding: "12px 16px"}}>
+ <div style={{ background: "#fff", borderRadius: "8px", border: "0.5px solid #E5E7EB", padding: "10px 12px", marginBottom: "8px"}}>
+ <div style={{ width: "50px", height: "8px", background: "#F3F4F6", borderRadius: "4px", marginBottom: "6px"}} />
+ <div style={{ width: "80px", height: "16px", background: "#1F2937", borderRadius: "4px", opacity: 0.7 }} />
+ </div>
+ <div style={{ background: "#fff", borderRadius: "8px", border: "0.5px solid #E5E7EB", padding: "10px 12px"}}>
+ <div style={{ width: "100%", height: "8px", background: "#F3F4F6", borderRadius: "4px", marginBottom: "6px"}} />
+ <div style={{ width: "100%", height: "28px", background: ckColor, borderRadius: "6px", opacity: 0.9 }} />
+ </div>
+ </div>
+ {/* Footer preview */}
+ <div style={{
+ background: "#fff", borderTop: "0.5px solid #F3F4F6",
+ padding: "6px 16px", display: "flex", justifyContent: "space-between",
+ }}>
+ <span style={{ fontSize: "8px", color: "#D1D5DB", textTransform: "uppercase", letterSpacing: "0.04em"}}> PayForce</span>
+ <span style={{ fontSize: "8px", color: "#D1D5DB", textTransform: "uppercase", letterSpacing: "0.04em"}}>PCI DSS · SSL 256-bit</span>
+ </div>
+ </div>
+ </div>
 
-            {/* Feedback */}
-            {ckMsg && (
-              <div className={`flex items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-medium ${
-                ckMsg.ok
-                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                  : "bg-red-50 text-red-700 border border-red-200"
-              }`}>
-                {ckMsg.ok ? <Check className="h-3.5 w-3.5 shrink-0" /> : null}
-                {ckMsg.text}
-              </div>
-            )}
+ {/* Feedback */}
+ {ckMsg && (
+ <div className={`flex items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-medium ${
+ ckMsg.ok
+ ? "bg-emerald-50 text-emerald-700 border border-emerald-200": "bg-red-50 text-red-700 border border-red-200"}`}>
+ {ckMsg.ok ? <Check className="h-3.5 w-3.5 shrink-0"/> : null}
+ {ckMsg.text}
+ </div>
+ )}
 
-            <div className="flex justify-end">
-              <button
-                onClick={() => void saveCkSettings()}
-                disabled={ckSaving}
-                className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-[13px] font-semibold text-white transition disabled:opacity-40"
-                style={{ background: theme.accentBg }}
-              >
-                {ckSaving
-                  ? <><Loader2 className="h-4 w-4 animate-spin" /> Guardando…</>
-                  : <><Check className="h-4 w-4" /> Guardar checkout</>}
-              </button>
-            </div>
-          </div>
-        )}
-      </section>
+ <div className="flex justify-end">
+ <button
+ onClick={() => void saveCkSettings()}
+ disabled={ckSaving}
+ className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-[13px] font-semibold text-white transition disabled:opacity-40"style={{ background: theme.accentBg }}
+ >
+ {ckSaving
+ ? <><Loader2 className="h-4 w-4 animate-spin"/> Guardando…</>
+ : <><Check className="h-4 w-4"/> Guardar checkout</>}
+ </button>
+ </div>
+ </div>
+ )}
+ </section>
 
-      {/* ── Extracto bancario ── */}
-      <section className="rounded-2xl border border-slate-100 bg-white p-6 space-y-5">
-        <div className="flex items-center gap-2">
-          <FileText className="h-4 w-4 text-slate-400" />
-          <h2 className="text-[13px] font-bold uppercase tracking-widest text-slate-400">
-            Extracto bancario
-          </h2>
-        </div>
-        <p className="text-[12px] text-slate-400 -mt-2">
-          Texto que aparece en el banco de tu cliente cuando le cobras. Máximo 22 caracteres, solo letras y números.
-        </p>
+ {/* Extracto bancario */}
+ <section className="rounded-2xl border border-slate-100 bg-white p-6 space-y-5">
+ <div className="flex items-center gap-2">
+ <FileText className="h-4 w-4 text-slate-400"/>
+ <h2 className="text-[13px] font-bold uppercase tracking-widest text-slate-400">
+ Extracto bancario
+ </h2>
+ </div>
+ <p className="text-[12px] text-slate-400 -mt-2">
+ Texto que aparece en el banco de tu cliente cuando le cobras. Máximo 22 caracteres, solo letras y números.
+ </p>
 
-        {descLoading ? (
-          <div className="h-10 w-full animate-pulse rounded-xl bg-slate-100" />
-        ) : (
-          <div className="space-y-3">
-            <div className="relative">
-              <input
-                type="text"
-                value={descriptor}
-                onChange={(e) => handleDescriptorChange(e.target.value)}
-                placeholder="MI EMPRESA"
-                maxLength={22}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 pr-16 text-[13px] font-mono uppercase text-slate-800 outline-none focus:border-slate-400 focus:bg-white transition"
-              />
-              <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-semibold tabular-nums ${descriptor.length >= 22 ? "text-red-400" : "text-slate-400"}`}>
-                {descriptor.length}/22
-              </span>
-            </div>
+ {descLoading ? (
+ <div className="h-10 w-full animate-pulse rounded-xl bg-slate-100"/>
+ ) : (
+ <div className="space-y-3">
+ <div className="relative">
+ <input
+ type="text"value={descriptor}
+ onChange={(e) => handleDescriptorChange(e.target.value)}
+ placeholder="MI EMPRESA"maxLength={22}
+ className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 pr-16 text-[13px] font-mono uppercase text-slate-800 outline-none focus:border-slate-400 focus:bg-white transition"/>
+ <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-semibold tabular-nums ${descriptor.length >= 22 ? "text-red-400": "text-slate-400"}`}>
+ {descriptor.length}/22
+ </span>
+ </div>
 
-            {/* Vista previa */}
-            <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-1.5">
-                Vista previa en extracto
-              </p>
-              <p className="font-mono text-[13px] text-slate-700">
-                {descriptor || "MI EMPRESA"}* PAYFORCE
-              </p>
-            </div>
+ {/* Vista previa */}
+ <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+ <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-1.5">
+ Vista previa en extracto
+ </p>
+ <p className="font-mono text-[13px] text-slate-700">
+ {descriptor || "MI EMPRESA"}* PAYFORCE
+ </p>
+ </div>
 
-            {/* Feedback */}
-            {descMsg && (
-              <div className={`flex items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-medium ${
-                descMsg.ok
-                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                  : "bg-red-50 text-red-700 border border-red-200"
-              }`}>
-                {descMsg.ok
-                  ? <Check className="h-3.5 w-3.5 shrink-0" />
-                  : <FileText className="h-3.5 w-3.5 shrink-0" />}
-                {descMsg.text}
-              </div>
-            )}
+ {/* Feedback */}
+ {descMsg && (
+ <div className={`flex items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-medium ${
+ descMsg.ok
+ ? "bg-emerald-50 text-emerald-700 border border-emerald-200": "bg-red-50 text-red-700 border border-red-200"}`}>
+ {descMsg.ok
+ ? <Check className="h-3.5 w-3.5 shrink-0"/>
+ : <FileText className="h-3.5 w-3.5 shrink-0"/>}
+ {descMsg.text}
+ </div>
+ )}
 
-            <div className="flex justify-end">
-              <button
-                onClick={saveDescriptor}
-                disabled={descSaving || descriptor === savedDescriptor || descriptor.length < 5}
-                className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-[13px] font-semibold text-white transition disabled:opacity-40"
-                style={{ background: theme.accentBg }}
-              >
-                {descSaving
-                  ? <><Loader2 className="h-4 w-4 animate-spin" /> Guardando…</>
-                  : <><Check className="h-4 w-4" /> Guardar cambios</>}
-              </button>
-            </div>
-          </div>
-        )}
-      </section>
+ <div className="flex justify-end">
+ <button
+ onClick={saveDescriptor}
+ disabled={descSaving || descriptor === savedDescriptor || descriptor.length < 5}
+ className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-[13px] font-semibold text-white transition disabled:opacity-40"style={{ background: theme.accentBg }}
+ >
+ {descSaving
+ ? <><Loader2 className="h-4 w-4 animate-spin"/> Guardando…</>
+ : <><Check className="h-4 w-4"/> Guardar cambios</>}
+ </button>
+ </div>
+ </div>
+ )}
+ </section>
 
-      {/* ── Cuenta bancaria ── */}
-      <section className="space-y-4 rounded-2xl border border-slate-100 bg-white p-6 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
-        <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100">
-            <Landmark className="h-4 w-4 text-slate-500" />
-          </div>
-          <div>
-            <h2 className="text-[14px] font-semibold text-slate-900">Cuenta bancaria y cobros</h2>
-            <p className="text-[12px] text-slate-400">Gestiona tu cuenta de pagos y verificación</p>
-          </div>
-        </div>
-        <p className="text-[13px] text-slate-500 leading-relaxed">
-          Configura tu cuenta para recibir pagos de tus clientes directamente en tu banco.
-          Necesitarás verificar tu identidad y añadir tu IBAN.
-        </p>
-        <Link
-          href="/app/connect/onboarding"
-          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-[13px] font-medium text-slate-700 hover:bg-slate-100 transition"
-        >
-          <Landmark className="h-3.5 w-3.5 text-slate-400" />
-          Ir a cuenta bancaria
-          <ArrowRight className="h-3.5 w-3.5 text-slate-400" />
-        </Link>
-      </section>
+ {/* Cuenta bancaria */}
+ <section className="space-y-4 rounded-2xl border border-slate-100 bg-white p-6 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+ <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+ <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100">
+ <Landmark className="h-4 w-4 text-slate-500"/>
+ </div>
+ <div>
+ <h2 className="text-[14px] font-semibold text-slate-900">Cuenta bancaria y cobros</h2>
+ <p className="text-[12px] text-slate-400">Gestiona tu cuenta de pagos y verificación</p>
+ </div>
+ </div>
+ <p className="text-[13px] text-slate-500 leading-relaxed">
+ Configura tu cuenta para recibir pagos de tus clientes directamente en tu banco.
+ Necesitarás verificar tu identidad y añadir tu IBAN.
+ </p>
+ <Link
+ href="/app/connect/onboarding"className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-[13px] font-medium text-slate-700 hover:bg-slate-100 transition">
+ <Landmark className="h-3.5 w-3.5 text-slate-400"/>
+ Ir a cuenta bancaria
+ <ArrowRight className="h-3.5 w-3.5 text-slate-400"/>
+ </Link>
+ </section>
 
-      {/* ── Dominio personalizado ─────────────────────────────────────────── */}
-      <section className="space-y-5 rounded-2xl border border-slate-100 bg-white p-6 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
-        <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100">
-            <Globe className="h-4 w-4 text-slate-500" />
-          </div>
-          <div>
-            <h2 className="text-[14px] font-semibold text-slate-900">Dominio personalizado</h2>
-            <p className="text-[12px] text-slate-400">Usa tu propio dominio para los links de pago · 15€/mes</p>
-          </div>
-        </div>
+ {/* Dominio personalizado */}
+ <section className="space-y-5 rounded-2xl border border-slate-100 bg-white p-6 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+ <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+ <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100">
+ <Globe className="h-4 w-4 text-slate-500"/>
+ </div>
+ <div>
+ <h2 className="text-[14px] font-semibold text-slate-900">Dominio personalizado</h2>
+ <p className="text-[12px] text-slate-400">Usa tu propio dominio para los links de pago · 15€/mes</p>
+ </div>
+ </div>
 
-        {domainLoading ? (
-          <div className="flex items-center gap-2 text-[13px] text-slate-400">
-            <Loader2 className="h-4 w-4 animate-spin" /> Cargando…
-          </div>
-        ) : !domainData?.customDomain ? (
-          /* ── Sin dominio configurado ── */
-          <div className="space-y-4">
-            <div className="rounded-xl bg-slate-50 border border-slate-100 p-4 space-y-2 text-[13px] text-slate-500">
-              <p>Sin dominio propio tus links de pago usan:</p>
-              <code className="block font-mono text-[12px] bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-700">
-                payforce.co/pay/token
-              </code>
-              <p className="mt-2">Con dominio propio quedan así:</p>
-              <code className="block font-mono text-[12px] bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-700">
-                checkout.tuempresa.com/pay/token
-              </code>
-            </div>
+ {domainLoading ? (
+ <div className="flex items-center gap-2 text-[13px] text-slate-400">
+ <Loader2 className="h-4 w-4 animate-spin"/> Cargando…
+ </div>
+ ) : !domainData?.customDomain ? (
+ /* Sin dominio configurado */
+ <div className="space-y-4">
+ <div className="rounded-xl bg-slate-50 border border-slate-100 p-4 space-y-2 text-[13px] text-slate-500">
+ <p>Sin dominio propio tus links de pago usan:</p>
+ <code className="block font-mono text-[12px] bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-700">
+ payforce.co/pay/token
+ </code>
+ <p className="mt-2">Con dominio propio quedan así:</p>
+ <code className="block font-mono text-[12px] bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-700">
+ checkout.tuempresa.com/pay/token
+ </code>
+ </div>
 
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={domainInput}
-                onChange={(e) => { setDomainInput(e.target.value); setDomainMsg(null); }}
-                placeholder="checkout.tuempresa.com"
-                className="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-[13px] text-slate-900 placeholder:text-slate-400 outline-none focus:border-slate-400 transition"
-              />
-              <button
-                onClick={addDomain}
-                disabled={domainSaving || !domainInput.trim()}
-                className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-semibold text-white transition disabled:opacity-40"
-                style={{ background: theme.accentBg }}
-              >
-                {domainSaving
-                  ? <Loader2 className="h-4 w-4 animate-spin" />
-                  : <Globe className="h-4 w-4" />}
-                Añadir
-              </button>
-            </div>
+ <div className="flex gap-2">
+ <input
+ type="text"value={domainInput}
+ onChange={(e) => { setDomainInput(e.target.value); setDomainMsg(null); }}
+ placeholder="checkout.tuempresa.com"className="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-[13px] text-slate-900 placeholder:text-slate-400 outline-none focus:border-slate-400 transition"/>
+ <button
+ onClick={addDomain}
+ disabled={domainSaving || !domainInput.trim()}
+ className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-semibold text-white transition disabled:opacity-40"style={{ background: theme.accentBg }}
+ >
+ {domainSaving
+ ? <Loader2 className="h-4 w-4 animate-spin"/>
+ : <Globe className="h-4 w-4"/>}
+ Añadir
+ </button>
+ </div>
 
-            {domainMsg && (
-              <div className={`flex items-start gap-2 rounded-xl px-4 py-3 text-[13px] ${domainMsg.ok ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"}`}>
-                {domainMsg.ok
-                  ? <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
-                  : <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />}
-                {domainMsg.text}
-              </div>
-            )}
-          </div>
-        ) : domainData.customDomainVerified ? (
-          /* ── Dominio verificado ── */
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-3">
-              <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
-              <div>
-                <p className="text-[14px] font-semibold text-emerald-800">{domainData.customDomain}</p>
-                <p className="text-[12px] text-emerald-600">Verificado · Activo</p>
-              </div>
-            </div>
-            <div className="rounded-xl bg-slate-50 border border-slate-100 p-4 text-[13px] text-slate-500">
-              <p>Tus links de pago usan:</p>
-              <code className="block font-mono text-[12px] bg-white border border-slate-200 rounded-lg px-3 py-2 mt-2 text-slate-700">
-                {domainData.customDomain}/pay/token
-              </code>
-            </div>
-            {domainMsg && (
-              <div className={`flex items-start gap-2 rounded-xl px-4 py-3 text-[13px] ${domainMsg.ok ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"}`}>
-                {domainMsg.ok ? <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" /> : <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />}
-                {domainMsg.text}
-              </div>
-            )}
-            <button
-              onClick={deleteDomain}
-              disabled={domainDeleting}
-              className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-[13px] font-medium text-red-600 hover:bg-red-100 transition disabled:opacity-40"
-            >
-              {domainDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-              Eliminar dominio
-            </button>
-          </div>
-        ) : (
-          /* ── Dominio pendiente de verificación ── */
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 rounded-xl bg-amber-50 border border-amber-100 px-4 py-3">
-              <Clock className="h-5 w-5 text-amber-500 shrink-0" />
-              <div>
-                <p className="text-[14px] font-semibold text-amber-800">{domainData.customDomain}</p>
-                <p className="text-[12px] text-amber-600">Pendiente de verificación DNS</p>
-              </div>
-            </div>
+ {domainMsg && (
+ <div className={`flex items-start gap-2 rounded-xl px-4 py-3 text-[13px] ${domainMsg.ok ? "bg-emerald-50 text-emerald-700": "bg-red-50 text-red-600"}`}>
+ {domainMsg.ok
+ ? <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5"/>
+ : <AlertCircle className="h-4 w-4 shrink-0 mt-0.5"/>}
+ {domainMsg.text}
+ </div>
+ )}
+ </div>
+ ) : domainData.customDomainVerified ? (
+ /* Dominio verificado */
+ <div className="space-y-4">
+ <div className="flex items-center gap-3 rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-3">
+ <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0"/>
+ <div>
+ <p className="text-[14px] font-semibold text-emerald-800">{domainData.customDomain}</p>
+ <p className="text-[12px] text-emerald-600">Verificado · Activo</p>
+ </div>
+ </div>
+ <div className="rounded-xl bg-slate-50 border border-slate-100 p-4 text-[13px] text-slate-500">
+ <p>Tus links de pago usan:</p>
+ <code className="block font-mono text-[12px] bg-white border border-slate-200 rounded-lg px-3 py-2 mt-2 text-slate-700">
+ {domainData.customDomain}/pay/token
+ </code>
+ </div>
+ {domainMsg && (
+ <div className={`flex items-start gap-2 rounded-xl px-4 py-3 text-[13px] ${domainMsg.ok ? "bg-emerald-50 text-emerald-700": "bg-red-50 text-red-600"}`}>
+ {domainMsg.ok ? <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5"/> : <AlertCircle className="h-4 w-4 shrink-0 mt-0.5"/>}
+ {domainMsg.text}
+ </div>
+ )}
+ <button
+ onClick={deleteDomain}
+ disabled={domainDeleting}
+ className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-[13px] font-medium text-red-600 hover:bg-red-100 transition disabled:opacity-40">
+ {domainDeleting ? <Loader2 className="h-4 w-4 animate-spin"/> : <Trash2 className="h-4 w-4"/>}
+ Eliminar dominio
+ </button>
+ </div>
+ ) : (
+ /* Dominio pendiente de verificación */
+ <div className="space-y-4">
+ <div className="flex items-center gap-3 rounded-xl bg-amber-50 border border-amber-100 px-4 py-3">
+ <Clock className="h-5 w-5 text-amber-500 shrink-0"/>
+ <div>
+ <p className="text-[14px] font-semibold text-amber-800">{domainData.customDomain}</p>
+ <p className="text-[12px] text-amber-600">Pendiente de verificación DNS</p>
+ </div>
+ </div>
 
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3 text-[13px]">
-              <p className="font-medium text-slate-700">Añade este registro DNS en tu proveedor:</p>
-              <div className="grid grid-cols-3 gap-2 font-mono text-[12px]">
-                <div className="rounded-lg bg-white border border-slate-200 px-3 py-2">
-                  <p className="text-slate-400 text-[10px] uppercase tracking-widest mb-1">Tipo</p>
-                  <p className="text-slate-800 font-semibold">{domainData.dnsRecord.type}</p>
-                </div>
-                <div className="rounded-lg bg-white border border-slate-200 px-3 py-2">
-                  <p className="text-slate-400 text-[10px] uppercase tracking-widest mb-1">Nombre</p>
-                  <p className="text-slate-800 font-semibold">{domainData.dnsRecord.name}</p>
-                </div>
-                <div className="rounded-lg bg-white border border-slate-200 px-3 py-2 col-span-3">
-                  <p className="text-slate-400 text-[10px] uppercase tracking-widest mb-1">Valor</p>
-                  <p className="text-slate-800 font-semibold break-all">{domainData.dnsRecord.value}</p>
-                </div>
-              </div>
-              <p className="text-[12px] text-slate-400">Los cambios DNS tardan 5-30 minutos en propagarse.</p>
-            </div>
+ <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3 text-[13px]">
+ <p className="font-medium text-slate-700">Añade este registro DNS en tu proveedor:</p>
+ <div className="grid grid-cols-3 gap-2 font-mono text-[12px]">
+ <div className="rounded-lg bg-white border border-slate-200 px-3 py-2">
+ <p className="text-slate-400 text-[10px] uppercase tracking-widest mb-1">Tipo</p>
+ <p className="text-slate-800 font-semibold">{domainData.dnsRecord.type}</p>
+ </div>
+ <div className="rounded-lg bg-white border border-slate-200 px-3 py-2">
+ <p className="text-slate-400 text-[10px] uppercase tracking-widest mb-1">Nombre</p>
+ <p className="text-slate-800 font-semibold">{domainData.dnsRecord.name}</p>
+ </div>
+ <div className="rounded-lg bg-white border border-slate-200 px-3 py-2 col-span-3">
+ <p className="text-slate-400 text-[10px] uppercase tracking-widest mb-1">Valor</p>
+ <p className="text-slate-800 font-semibold break-all">{domainData.dnsRecord.value}</p>
+ </div>
+ </div>
+ <p className="text-[12px] text-slate-400">Los cambios DNS tardan 5-30 minutos en propagarse.</p>
+ </div>
 
-            {domainMsg && (
-              <div className={`flex items-start gap-2 rounded-xl px-4 py-3 text-[13px] ${domainMsg.ok ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
-                {domainMsg.ok ? <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" /> : <Clock className="h-4 w-4 shrink-0 mt-0.5" />}
-                {domainMsg.text}
-              </div>
-            )}
+ {domainMsg && (
+ <div className={`flex items-start gap-2 rounded-xl px-4 py-3 text-[13px] ${domainMsg.ok ? "bg-emerald-50 text-emerald-700": "bg-amber-50 text-amber-700"}`}>
+ {domainMsg.ok ? <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5"/> : <Clock className="h-4 w-4 shrink-0 mt-0.5"/>}
+ {domainMsg.text}
+ </div>
+ )}
 
-            <div className="flex gap-2">
-              <button
-                onClick={verifyDomain}
-                disabled={domainVerifying}
-                className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-semibold text-white transition disabled:opacity-40"
-                style={{ background: theme.accentBg }}
-              >
-                {domainVerifying ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                Verificar ahora
-              </button>
-              <button
-                onClick={deleteDomain}
-                disabled={domainDeleting}
-                className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-[13px] font-medium text-slate-600 hover:bg-slate-100 transition disabled:opacity-40"
-              >
-                {domainDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                Eliminar
-              </button>
-            </div>
-          </div>
-        )}
-      </section>
+ <div className="flex gap-2">
+ <button
+ onClick={verifyDomain}
+ disabled={domainVerifying}
+ className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-semibold text-white transition disabled:opacity-40"style={{ background: theme.accentBg }}
+ >
+ {domainVerifying ? <Loader2 className="h-4 w-4 animate-spin"/> : <CheckCircle2 className="h-4 w-4"/>}
+ Verificar ahora
+ </button>
+ <button
+ onClick={deleteDomain}
+ disabled={domainDeleting}
+ className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-[13px] font-medium text-slate-600 hover:bg-slate-100 transition disabled:opacity-40">
+ {domainDeleting ? <Loader2 className="h-4 w-4 animate-spin"/> : <Trash2 className="h-4 w-4"/>}
+ Eliminar
+ </button>
+ </div>
+ </div>
+ )}
+ </section>
 
-      {/* ── Notificaciones push ─────────────────────────────────────────── */}
-      <PushNotificationsSection />
-    </div>
-  );
+ {/* Notificaciones push */}
+ <PushNotificationsSection />
+ </div>
+ );
 }
 
-// ─── Sección de notificaciones push ───────────────────────────────────────────
+// Sección de notificaciones push 
 function PushNotificationsSection() {
-  const [status, setStatus] = useState<"idle" | "loading" | "active" | "denied">("idle");
+ const [status, setStatus] = useState<"idle"| "loading"| "active"| "denied">("idle");
 
-  useEffect(() => {
-    if (typeof window === "undefined" || !("Notification" in window)) return;
-    if (Notification.permission === "denied") { setStatus("denied"); return; }
-    navigator.serviceWorker?.getRegistration("/sw.js").then(async (reg) => {
-      if (!reg) return;
-      const sub = await reg.pushManager.getSubscription();
-      if (sub) setStatus("active");
-    }).catch(() => null);
-  }, []);
+ useEffect(() => {
+ if (typeof window === "undefined"|| !("Notification"in window)) return;
+ if (Notification.permission === "denied") { setStatus("denied"); return; }
+ navigator.serviceWorker?.getRegistration("/sw.js").then(async (reg) => {
+ if (!reg) return;
+ const sub = await reg.pushManager.getSubscription();
+ if (sub) setStatus("active");
+ }).catch(() => null);
+ }, []);
 
-  async function activar() {
-    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-      alert("Tu navegador no soporta notificaciones push");
-      return;
-    }
-    const permission = await Notification.requestPermission();
-    if (permission !== "granted") { setStatus("denied"); return; }
+ async function activar() {
+ if (!("serviceWorker"in navigator) || !("PushManager"in window)) {
+ alert("Tu navegador no soporta notificaciones push");
+ return;
+ }
+ const permission = await Notification.requestPermission();
+ if (permission !== "granted") { setStatus("denied"); return; }
 
-    setStatus("loading");
-    try {
-      const reg = await navigator.serviceWorker.register("/sw.js");
-      await navigator.serviceWorker.ready;
-      const sub = await reg.pushManager.subscribe({
-        userVisibleOnly:      true,
-        applicationServerKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
-      });
-      const json = sub.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } };
-      const res  = await fetch("/api/notifications/subscribe", {
-        method:      "POST",
-        headers:     { "Content-Type": "application/json" },
-        body:        JSON.stringify({ endpoint: json.endpoint, keys: json.keys }),
-        credentials: "include",
-      });
-      setStatus(res.ok ? "active" : "idle");
-    } catch (err) {
-      setStatus((err as { name?: string })?.name === "NotAllowedError" ? "denied" : "idle");
-    }
-  }
+ setStatus("loading");
+ try {
+ const reg = await navigator.serviceWorker.register("/sw.js");
+ await navigator.serviceWorker.ready;
+ const sub = await reg.pushManager.subscribe({
+ userVisibleOnly: true,
+ applicationServerKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+ });
+ const json = sub.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } };
+ const res = await fetch("/api/notifications/subscribe", {
+ method: "POST",
+ headers: { "Content-Type": "application/json"},
+ body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys }),
+ credentials: "include",
+ });
+ setStatus(res.ok ? "active": "idle");
+ } catch (err) {
+ setStatus((err as { name?: string })?.name === "NotAllowedError"? "denied": "idle");
+ }
+ }
 
-  async function desactivar() {
-    const reg = await navigator.serviceWorker.getRegistration("/sw.js");
-    const sub = await reg?.pushManager.getSubscription();
-    if (sub) {
-      await fetch("/api/notifications/subscribe", {
-        method:      "DELETE",
-        headers:     { "Content-Type": "application/json" },
-        body:        JSON.stringify({ endpoint: sub.endpoint }),
-        credentials: "include",
-      });
-      await sub.unsubscribe();
-    }
-    setStatus("idle");
-  }
+ async function desactivar() {
+ const reg = await navigator.serviceWorker.getRegistration("/sw.js");
+ const sub = await reg?.pushManager.getSubscription();
+ if (sub) {
+ await fetch("/api/notifications/subscribe", {
+ method: "DELETE",
+ headers: { "Content-Type": "application/json"},
+ body: JSON.stringify({ endpoint: sub.endpoint }),
+ credentials: "include",
+ });
+ await sub.unsubscribe();
+ }
+ setStatus("idle");
+ }
 
-  return (
-    <section className="space-y-5 rounded-2xl border border-slate-100 bg-white p-6 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
-      <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100">
-          <Bell className="h-4 w-4 text-slate-500" />
-        </div>
-        <div>
-          <h2 className="text-[14px] font-semibold text-slate-900">Notificaciones push</h2>
-          <p className="text-[12px] text-slate-400">Recibe alertas en tiempo real en este dispositivo</p>
-        </div>
-        {status === "active" && (
-          <span className="ml-auto flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-700">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            Activas
-          </span>
-        )}
-      </div>
+ return (
+ <section className="space-y-5 rounded-2xl border border-slate-100 bg-white p-6 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+ <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+ <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100">
+ <Bell className="h-4 w-4 text-slate-500"/>
+ </div>
+ <div>
+ <h2 className="text-[14px] font-semibold text-slate-900">Notificaciones push</h2>
+ <p className="text-[12px] text-slate-400">Recibe alertas en tiempo real en este dispositivo</p>
+ </div>
+ {status === "active"&& (
+ <span className="ml-auto flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-700">
+ <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"/>
+ Activas
+ </span>
+ )}
+ </div>
 
-      <ul className="space-y-2">
-        {[
-          "Nuevo pago recibido",
-          "Cobro mensual completado (batch)",
-          "Error en un cobro de suscripción",
-        ].map((txt) => (
-          <li key={txt} className="flex items-center gap-2 text-[13px] text-slate-600">
-            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
-            {txt}
-          </li>
-        ))}
-      </ul>
+ <ul className="space-y-2">
+ {[
+ "Nuevo pago recibido",
+ "Cobro mensual completado (batch)",
+ "Error en un cobro de suscripción",
+ ].map((txt) => (
+ <li key={txt} className="flex items-center gap-2 text-[13px] text-slate-600">
+ <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500"/>
+ {txt}
+ </li>
+ ))}
+ </ul>
 
-      {status === "denied" && (
-        <div className="flex items-center gap-2 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-[12px] text-amber-700">
-          <AlertCircle className="h-4 w-4 shrink-0" />
-          Has bloqueado las notificaciones en este navegador. Actívalas desde la configuración del navegador.
-        </div>
-      )}
+ {status === "denied"&& (
+ <div className="flex items-center gap-2 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-[12px] text-amber-700">
+ <AlertCircle className="h-4 w-4 shrink-0"/>
+ Has bloqueado las notificaciones en este navegador. Actívalas desde la configuración del navegador.
+ </div>
+ )}
 
-      <div className="flex justify-end">
-        {status === "active" ? (
-          <button onClick={() => void desactivar()}
-            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-5 py-2.5 text-[13px] font-medium text-slate-600 hover:bg-slate-100 transition">
-            <BellOff className="h-4 w-4" /> Desactivar notificaciones
-          </button>
-        ) : (
-          <button onClick={() => void activar()} disabled={status === "loading" || status === "denied"}
-            className="flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-[13px] font-semibold text-white transition hover:bg-slate-700 disabled:opacity-40">
-            {status === "loading"
-              ? <><Loader2 className="h-4 w-4 animate-spin" />Activando…</>
-              : <><Bell className="h-4 w-4" />Activar notificaciones</>}
-          </button>
-        )}
-      </div>
-    </section>
-  );
+ <div className="flex justify-end">
+ {status === "active"? (
+ <button onClick={() => void desactivar()}
+ className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-5 py-2.5 text-[13px] font-medium text-slate-600 hover:bg-slate-100 transition">
+ <BellOff className="h-4 w-4"/> Desactivar notificaciones
+ </button>
+ ) : (
+ <button onClick={() => void activar()} disabled={status === "loading"|| status === "denied"}
+ className="flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-[13px] font-semibold text-white transition hover:bg-slate-700 disabled:opacity-40">
+ {status === "loading"? <><Loader2 className="h-4 w-4 animate-spin"/>Activando…</>
+ : <><Bell className="h-4 w-4"/>Activar notificaciones</>}
+ </button>
+ )}
+ </div>
+ </section>
+ );
 }

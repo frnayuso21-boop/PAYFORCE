@@ -270,7 +270,7 @@ async function handlePaymentSucceeded(pi: Stripe.PaymentIntent, eventId: string,
   // 1. Al merchant
   if (account.userId) {
     sendPushToUser(account.userId, {
-      title: "💳 Nuevo pago recibido",
+      title: "Nuevo pago recibido",
       body:  `${amountFmt}€ · ${desc}`,
       url:   "/app/dashboard",
       tag:   `payment-${pi.id}`,
@@ -279,7 +279,7 @@ async function handlePaymentSucceeded(pi: Stripe.PaymentIntent, eventId: string,
 
   // 2. Al admin (comisión ganada)
   sendPushToAdmin({
-    title: `💰 Nueva comisión — ${account.businessName || "Merchant"}`,
+    title: `Nueva comisión — ${account.businessName || "Merchant"}`,
     body:  `Has ganado ${feeFmt}€ en un pago de ${amountFmt}€`,
     url:   "/admin/payments",
     tag:   `admin-payment-${pi.id}`,

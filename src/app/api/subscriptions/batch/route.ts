@@ -217,7 +217,7 @@ export async function POST(req: NextRequest) {
   // Notif al merchant
   if (account.userId) {
     sendPushToUser(account.userId, {
-      title: "✅ Cobro mensual completado",
+      title: "Cobro mensual completado",
       body:  `${totalChargedEur}€ cobrados · ${successCount} exitosos · ${failedCount} fallidos`,
       url:   "/app/subscriptions",
       tag:   `batch-${batchJob.id}`,
@@ -228,7 +228,7 @@ export async function POST(req: NextRequest) {
   const estimatedFee    = Math.round(totalCharged * 0.015);
   const estimatedFeeEur = (estimatedFee / 100).toFixed(2);
   sendPushToAdmin({
-    title: `💰 Batch completado — ${account.businessName || "Merchant"}`,
+    title: `Batch completado — ${account.businessName || "Merchant"}`,
     body:  `Has ganado ~${estimatedFeeEur}€ en comisiones · ${successCount} cobros exitosos`,
     url:   "/admin",
     tag:   `admin-batch-${batchJob.id}`,

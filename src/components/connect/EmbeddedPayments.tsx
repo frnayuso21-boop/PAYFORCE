@@ -1,14 +1,14 @@
 "use client";
 
 import {
-  ConnectPayments,
-  ConnectPaymentDetails,
+ ConnectPayments,
+ ConnectPaymentDetails,
 } from "@stripe/react-connect-js";
-import { useState }        from "react";
+import { useState } from "react";
 import { ConnectProvider } from "./ConnectProvider";
 
 interface EmbeddedPaymentsProps {
-  accountId?: string;
+ accountId?: string;
 }
 
 /**
@@ -22,17 +22,17 @@ interface EmbeddedPaymentsProps {
  * un pago desde la lista (el componente maneja el estado internamente).
  */
 export function EmbeddedPayments({ accountId }: EmbeddedPaymentsProps) {
-  const [selectedPayment, setSelectedPayment] = useState<string | null>(null);
+ const [selectedPayment, setSelectedPayment] = useState<string | null>(null);
 
-  return (
-    <ConnectProvider accountId={accountId}>
-      <ConnectPayments />
-      {selectedPayment && (
-        <ConnectPaymentDetails
-          payment={selectedPayment}
-          onClose={() => setSelectedPayment(null)}
-        />
-      )}
-    </ConnectProvider>
-  );
+ return (
+ <ConnectProvider accountId={accountId}>
+ <ConnectPayments />
+ {selectedPayment && (
+ <ConnectPaymentDetails
+ payment={selectedPayment}
+ onClose={() => setSelectedPayment(null)}
+ />
+ )}
+ </ConnectProvider>
+ );
 }

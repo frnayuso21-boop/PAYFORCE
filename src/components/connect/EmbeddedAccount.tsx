@@ -1,10 +1,10 @@
 "use client";
 
 import { ConnectAccountManagement } from "@stripe/react-connect-js";
-import { ConnectProvider }          from "./ConnectProvider";
+import { ConnectProvider } from "./ConnectProvider";
 
 interface EmbeddedAccountProps {
-  accountId?: string;
+ accountId?: string;
 }
 
 /**
@@ -16,9 +16,9 @@ interface EmbeddedAccountProps {
  * Reemplaza el Express Dashboard como herramienta de gestión.
  */
 export function EmbeddedAccount({ accountId }: EmbeddedAccountProps) {
-  return (
-    <ConnectProvider accountId={accountId}>
-      <ConnectAccountManagement />
-    </ConnectProvider>
-  );
+ return (
+ <ConnectProvider accountId={accountId}>
+ <ConnectAccountManagement />
+ </ConnectProvider>
+ );
 }

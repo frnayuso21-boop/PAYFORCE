@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
   const fecha         = now.toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long" });
 
   await sendPushToAdmin({
-    title: "📊 Resumen de hoy — PayForce",
+    title: "Resumen de hoy — PayForce",
     body:  `Has ganado ${comisionesEur}€ en ${totalTransacciones} transacción${totalTransacciones > 1 ? "es" : ""} · ${fecha}`,
     url:   "/admin",
     tag:   `daily-summary-${now.toISOString().slice(0, 10)}`,

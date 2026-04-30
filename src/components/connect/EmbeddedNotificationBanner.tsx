@@ -1,12 +1,12 @@
 "use client";
 
-import type { NotificationCount }   from "@stripe/connect-js";
+import type { NotificationCount } from "@stripe/connect-js";
 import { ConnectNotificationBanner } from "@stripe/react-connect-js";
-import { ConnectProvider }           from "./ConnectProvider";
+import { ConnectProvider } from "./ConnectProvider";
 
 interface EmbeddedNotificationBannerProps {
-  accountId?:             string;
-  onNotificationsChange?: (count: NotificationCount) => void;
+ accountId?: string;
+ onNotificationsChange?: (count: NotificationCount) => void;
 }
 
 /**
@@ -18,14 +18,14 @@ interface EmbeddedNotificationBannerProps {
  * Solo se renderiza si hay notificaciones reales — si no hay nada, no ocupa espacio.
  */
 export function EmbeddedNotificationBanner({
-  accountId,
-  onNotificationsChange,
+ accountId,
+ onNotificationsChange,
 }: EmbeddedNotificationBannerProps) {
-  return (
-    <ConnectProvider accountId={accountId}>
-      <ConnectNotificationBanner
-        onNotificationsChange={onNotificationsChange}
-      />
-    </ConnectProvider>
-  );
+ return (
+ <ConnectProvider accountId={accountId}>
+ <ConnectNotificationBanner
+ onNotificationsChange={onNotificationsChange}
+ />
+ </ConnectProvider>
+ );
 }
