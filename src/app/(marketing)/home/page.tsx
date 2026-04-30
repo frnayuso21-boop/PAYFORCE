@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowRight, CreditCard, RefreshCw, Link2, BarChart3,
@@ -442,6 +443,56 @@ function ProductSections() {
   );
 }
 
+function TapToPaySection() {
+  return (
+    <section style={{ background: "#000000" }} className="relative overflow-hidden">
+      {/* Glow radial sutil */}
+      <div className="pointer-events-none absolute inset-0"
+        style={{
+          background: "radial-gradient(ellipse 60% 50% at 50% 50%, rgba(37,99,235,0.12) 0%, transparent 70%)",
+        }} />
+
+      <div className="relative mx-auto max-w-6xl px-6 pt-20 pb-0 text-center">
+        {/* Etiqueta */}
+        <span className="inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-[12px] font-medium mb-6"
+          style={{ borderColor: "rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.55)", background: "rgba(255,255,255,0.04)" }}>
+          <Zap className="h-3 w-3" style={{ color: "#2563EB" }} />
+          Tap to Pay · Solo móvil
+        </span>
+
+        {/* Headline */}
+        <h2 className="text-[36px] md:text-[60px] font-semibold leading-[1.06] tracking-[-1.5px] text-white max-w-3xl mx-auto">
+          Tu móvil es
+          <br />
+          <span style={{ color: "#2563EB" }}>tu TPV</span>
+        </h2>
+
+        <p className="mt-5 text-[16px] md:text-[18px] max-w-lg mx-auto leading-relaxed"
+          style={{ color: "rgba(255,255,255,0.45)" }}>
+          Acerca cualquier tarjeta a tu iPhone y cobra al instante. Sin hardware, sin cables, sin esperas.
+        </p>
+
+        {/* Imagen en grande */}
+        <div className="mt-12 relative">
+          <Image
+            src="/images/tap-to-pay.png"
+            alt="Tap to Pay con iPhone — PayForce"
+            width={1020}
+            height={680}
+            quality={100}
+            priority
+            className="mx-auto w-full max-w-4xl object-contain select-none"
+            style={{ marginBottom: "-2px" }}
+          />
+          {/* Fade bottom para transición suave a la sección siguiente */}
+          <div className="absolute bottom-0 left-0 right-0 h-32 pointer-events-none"
+            style={{ background: "linear-gradient(to bottom, transparent, #000000)" }} />
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function DashboardPreview() {
   return (
     <section className="py-24 bg-white">
@@ -738,6 +789,7 @@ export default function HomePage() {
     <>
       <Hero />
       <ProductSections />
+      <TapToPaySection />
       <DashboardPreview />
       <CheckoutUI />
       <Trust />
