@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen font-sans antialiased" style={{ background: "#ffffff", overflowX: "hidden" }} suppressHydrationWarning>
+    <div className="min-h-screen font-sans antialiased bg-white" style={{ overflowX: "hidden" }} suppressHydrationWarning>
       <MarketingNav />
       <main>{children}</main>
       <MarketingFooter />
