@@ -475,14 +475,15 @@ function TapToPaySection() {
         {/* Imagen en grande */}
         <div className="mt-12 relative">
           <Image
-            src="/images/tap-to-pay.png"
+            src="/images/tap-to-pay-hd.png"
             alt="Tap to Pay con iPhone — PayForce"
-            width={1020}
-            height={680}
+            width={4096}
+            height={2060}
             quality={100}
             priority
-            className="mx-auto w-full max-w-4xl object-contain select-none"
-            style={{ marginBottom: "-2px" }}
+            unoptimized
+            className="mx-auto w-full max-w-5xl object-contain select-none"
+            style={{ marginBottom: "-2px", imageRendering: "auto" }}
           />
           {/* Fade bottom para transición suave a la sección siguiente */}
           <div className="absolute bottom-0 left-0 right-0 h-32 pointer-events-none"
