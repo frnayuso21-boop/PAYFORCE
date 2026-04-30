@@ -479,11 +479,15 @@ function TapToPaySection() {
             alt="Tap to Pay con iPhone — PayForce"
             width={4096}
             height={2060}
-            quality={100}
             priority
             unoptimized
             className="mx-auto w-full max-w-5xl object-contain select-none"
-            style={{ marginBottom: "-2px", imageRendering: "auto" }}
+            style={{
+              marginBottom: "-2px",
+              imageRendering:         "high-quality",
+              WebkitFontSmoothing:    "antialiased",
+              filter: "contrast(1.06) brightness(1.02) saturate(1.08)",
+            }}
           />
           {/* Fade bottom para transición suave a la sección siguiente */}
           <div className="absolute bottom-0 left-0 right-0 h-32 pointer-events-none"
