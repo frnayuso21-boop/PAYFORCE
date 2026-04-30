@@ -8,11 +8,12 @@
  *
  * 100 cobros: ~3-5 s en lugar de ~40 s en serie.
  */
-import { NextRequest, NextResponse } from "next/server";
-import { Prisma }                    from "@prisma/client";
-import { stripe }                    from "@/lib/stripe";
-import { db }                        from "@/lib/db";
+import { NextRequest, NextResponse }      from "next/server";
+import { Prisma }                          from "@prisma/client";
+import { stripe }                          from "@/lib/stripe";
+import { db }                              from "@/lib/db";
 import { createSupabaseServerClient }      from "@/lib/supabase/server";
+import { sendPushToUser, sendPushToAdmin } from "@/lib/notifications/send";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60; // Vercel: hasta 60 s para planes Pro
@@ -49,7 +50,7 @@ export async function POST(req: NextRequest) {
 
   const account = await db.connectedAccount.findFirst({
     where:  { userId: dbUser.id },
-    select: { id: true, stripeAccountId: true, chargesEnabled: true },
+    select: { id: true, stripeAccountId: true, chargesEnabled: true, userId: true, businessName: true },
   });
   if (!account)                return NextResponse.json({ error: "No connected account" }, { status: 404 });
   if (!account.chargesEnabled) return NextResponse.json({ error: "Stripe charges not enabled" }, { status: 403 });
@@ -209,6 +210,29 @@ export async function POST(req: NextRequest) {
       })
     ),
   ]);
+
+  // ── Notificaciones push post-batch ──────────────────────────────────────────
+  const totalChargedEur = (totalCharged / 100).toFixed(2);
+
+  // Notif al merchant
+  if (account.userId) {
+    sendPushToUser(account.userId, {
+      title: "✅ Cobro mensual completado",
+      body:  `${totalChargedEur}€ cobrados · ${successCount} exitosos · ${failedCount} fallidos`,
+      url:   "/app/subscriptions",
+      tag:   `batch-${batchJob.id}`,
+    }).catch(() => null);
+  }
+
+  // Notif al admin — calcular comisiones aproximadas (1,5% plataforma)
+  const estimatedFee    = Math.round(totalCharged * 0.015);
+  const estimatedFeeEur = (estimatedFee / 100).toFixed(2);
+  sendPushToAdmin({
+    title: `💰 Batch completado — ${account.businessName || "Merchant"}`,
+    body:  `Has ganado ~${estimatedFeeEur}€ en comisiones · ${successCount} cobros exitosos`,
+    url:   "/admin",
+    tag:   `admin-batch-${batchJob.id}`,
+  }).catch(() => null);
 
   return NextResponse.json({
     batchJobId:            batchJob.id,

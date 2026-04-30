@@ -4,7 +4,7 @@ import { stripe, webhookSecret } from "@/lib/stripe";
 import { db } from "@/lib/db";
 import { resolveConnectStatus } from "@/lib/connect";
 import { sendPaymentReceiptEmail } from "@/lib/email";
-import { sendPushToUser } from "@/lib/webpush";
+import { sendPushToUser, sendPushToAdmin } from "@/lib/notifications/send";
 import { calculateFee } from "@/lib/fees";
 
 export const runtime = "nodejs";
@@ -262,16 +262,28 @@ async function handlePaymentSucceeded(pi: Stripe.PaymentIntent, eventId: string,
     log.info("payment_link.paid", { eventId, token });
   }
 
-  // Notificación push al merchant — no bloquea el webhook si falla
+  // Notificaciones push — no bloquean el webhook si fallan
+  const amountFmt = (pi.amount / 100).toFixed(2);
+  const feeFmt    = (platformFee / 100).toFixed(2);
+  const desc      = pi.description ?? "Pago";
+
+  // 1. Al merchant
   if (account.userId) {
-    const amountFormatted = (pi.amount / 100).toFixed(2);
-    const description     = pi.description ?? "Nuevo pago";
     sendPushToUser(account.userId, {
       title: "💳 Nuevo pago recibido",
-      body:  `${amountFormatted}€ — ${description}`,
+      body:  `${amountFmt}€ · ${desc}`,
       url:   "/app/dashboard",
+      tag:   `payment-${pi.id}`,
     }).catch(() => null);
   }
+
+  // 2. Al admin (comisión ganada)
+  sendPushToAdmin({
+    title: `💰 Nueva comisión — ${account.businessName || "Merchant"}`,
+    body:  `Has ganado ${feeFmt}€ en un pago de ${amountFmt}€`,
+    url:   "/admin/payments",
+    tag:   `admin-payment-${pi.id}`,
+  }).catch(() => null);
 
   // Email de confirmación al pagador — no bloquea el webhook si falla
   if (pi.receipt_email) {

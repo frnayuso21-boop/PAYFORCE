@@ -2,7 +2,7 @@
 
 import { useRef, useState, useEffect } from "react";
 import { useStatementDescriptor } from "@/hooks/useDashboard";
-import { Upload, Trash2, Check, Palette, Landmark, ArrowRight, FileText, Loader2, ShoppingBag, Globe, AlertCircle, CheckCircle2, Clock } from "lucide-react";
+import { Upload, Trash2, Check, Palette, Landmark, ArrowRight, FileText, Loader2, ShoppingBag, Globe, AlertCircle, CheckCircle2, Clock, Bell, BellOff } from "lucide-react";
 import Link from "next/link";
 import { useBrand }       from "@/context/BrandContext";
 import { THEMES, THEME_IDS } from "@/lib/themes";
@@ -832,6 +832,124 @@ export default function SettingsPage() {
           </div>
         )}
       </section>
+
+      {/* ── Notificaciones push ─────────────────────────────────────────── */}
+      <PushNotificationsSection />
     </div>
+  );
+}
+
+// ─── Sección de notificaciones push ───────────────────────────────────────────
+function PushNotificationsSection() {
+  const [status, setStatus] = useState<"idle" | "loading" | "active" | "denied">("idle");
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+    if (Notification.permission === "denied") { setStatus("denied"); return; }
+    navigator.serviceWorker?.getRegistration("/sw.js").then(async (reg) => {
+      if (!reg) return;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) setStatus("active");
+    }).catch(() => null);
+  }, []);
+
+  async function activar() {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      alert("Tu navegador no soporta notificaciones push");
+      return;
+    }
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") { setStatus("denied"); return; }
+
+    setStatus("loading");
+    try {
+      const reg = await navigator.serviceWorker.register("/sw.js");
+      await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly:      true,
+        applicationServerKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+      });
+      const json = sub.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } };
+      const res  = await fetch("/api/notifications/subscribe", {
+        method:      "POST",
+        headers:     { "Content-Type": "application/json" },
+        body:        JSON.stringify({ endpoint: json.endpoint, keys: json.keys }),
+        credentials: "include",
+      });
+      setStatus(res.ok ? "active" : "idle");
+    } catch (err) {
+      setStatus((err as { name?: string })?.name === "NotAllowedError" ? "denied" : "idle");
+    }
+  }
+
+  async function desactivar() {
+    const reg = await navigator.serviceWorker.getRegistration("/sw.js");
+    const sub = await reg?.pushManager.getSubscription();
+    if (sub) {
+      await fetch("/api/notifications/subscribe", {
+        method:      "DELETE",
+        headers:     { "Content-Type": "application/json" },
+        body:        JSON.stringify({ endpoint: sub.endpoint }),
+        credentials: "include",
+      });
+      await sub.unsubscribe();
+    }
+    setStatus("idle");
+  }
+
+  return (
+    <section className="space-y-5 rounded-2xl border border-slate-100 bg-white p-6 shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+      <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100">
+          <Bell className="h-4 w-4 text-slate-500" />
+        </div>
+        <div>
+          <h2 className="text-[14px] font-semibold text-slate-900">Notificaciones push</h2>
+          <p className="text-[12px] text-slate-400">Recibe alertas en tiempo real en este dispositivo</p>
+        </div>
+        {status === "active" && (
+          <span className="ml-auto flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-700">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            Activas
+          </span>
+        )}
+      </div>
+
+      <ul className="space-y-2">
+        {[
+          "Nuevo pago recibido",
+          "Cobro mensual completado (batch)",
+          "Error en un cobro de suscripción",
+        ].map((txt) => (
+          <li key={txt} className="flex items-center gap-2 text-[13px] text-slate-600">
+            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+            {txt}
+          </li>
+        ))}
+      </ul>
+
+      {status === "denied" && (
+        <div className="flex items-center gap-2 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-[12px] text-amber-700">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          Has bloqueado las notificaciones en este navegador. Actívalas desde la configuración del navegador.
+        </div>
+      )}
+
+      <div className="flex justify-end">
+        {status === "active" ? (
+          <button onClick={() => void desactivar()}
+            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-5 py-2.5 text-[13px] font-medium text-slate-600 hover:bg-slate-100 transition">
+            <BellOff className="h-4 w-4" /> Desactivar notificaciones
+          </button>
+        ) : (
+          <button onClick={() => void activar()} disabled={status === "loading" || status === "denied"}
+            className="flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-[13px] font-semibold text-white transition hover:bg-slate-700 disabled:opacity-40">
+            {status === "loading"
+              ? <><Loader2 className="h-4 w-4 animate-spin" />Activando…</>
+              : <><Bell className="h-4 w-4" />Activar notificaciones</>}
+          </button>
+        )}
+      </div>
+    </section>
   );
 }
